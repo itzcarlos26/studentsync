@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Force browser to fetch the latest version and prevent caching old screens -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <title>StudentSync | Tracker</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -69,10 +74,12 @@
     <!-- MAIN APP LAYOUT -->
     <div id="app-layout" class="hidden flex-col md:flex-row h-full w-full z-10 relative">
         
-        <!-- Mobile Top Bar -->
+        <!-- Mobile Top Bar (with Logout Profile Icon) -->
         <div class="md:hidden bg-[#4B5320] text-white p-4 font-bold text-xl flex items-center justify-between shadow-md z-20 shrink-0">
             <span>StudentSync</span>
-            <i data-lucide="graduation-cap" class="h-6 w-6 text-[#DCD7A0]"></i>
+            <button onclick="logout()" class="p-2 bg-[#556B2F] rounded-full hover:bg-[#6b853b] transition-colors shadow-inner flex items-center justify-center" title="Log Out">
+                <i data-lucide="log-out" class="h-4 w-4 text-[#DCD7A0]"></i>
+            </button>
         </div>
 
         <!-- Sidebar / Nav (Fixed to bottom on mobile) -->
@@ -81,13 +88,29 @@
                 <i data-lucide="graduation-cap" class="h-8 w-8 text-[#DCD7A0]"></i>
                 <span>StudentSync</span>
             </div>
+            
+            <!-- Desktop User Profile Area -->
+            <div class="hidden md:flex flex-col items-center p-4 border-b border-[#D5D8C5] shrink-0 bg-[#F4F5F0]">
+                <div class="h-10 w-10 bg-[#556B2F] rounded-full flex items-center justify-center text-white mb-2 shadow-sm">
+                    <i data-lucide="user" class="h-5 w-5"></i>
+                </div>
+                <span id="user-email-desktop" class="text-xs font-bold text-stone-600 truncate w-full text-center"></span>
+            </div>
+
             <!-- Navigation Items Container -->
-            <div class="flex md:flex-col justify-start md:justify-around p-2 md:p-4 gap-2 h-16 md:h-full overflow-x-auto md:overflow-y-auto no-scrollbar shrink-0" id="nav-container">
+            <div class="flex md:flex-col justify-start md:justify-around p-2 md:p-4 gap-2 h-16 md:h-full overflow-x-auto md:overflow-y-auto no-scrollbar shrink-0 flex-1" id="nav-container">
                 <!-- Nav items injected here -->
+            </div>
+            
+            <!-- Desktop Logout Button -->
+            <div class="hidden md:block p-4 mt-auto border-t border-[#D5D8C5] shrink-0">
+                <button onclick="logout()" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-red-600 font-bold hover:bg-red-50 transition-colors">
+                    <i data-lucide="log-out" class="h-5 w-5"></i> Log Out
+                </button>
             </div>
         </nav>
 
-        <!-- Main Content (Padding bottom added to prevent content hiding behind fixed mobile nav) -->
+        <!-- Main Content -->
         <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 z-10 relative" id="app-content">
             <div class="max-w-6xl mx-auto h-full" id="main-view">
                 <!-- Loading Spinner -->
@@ -104,7 +127,6 @@
     <script type="module">
         // --- FIREBASE IMPORTS ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // ADDED Email/Password Auth methods to solve the Syncing issue across devices
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -197,6 +219,10 @@
             onAuthStateChanged(auth, (user) => {
                 state.user = user;
                 if (user) {
+                    // Inject Email into Sidebar Profile
+                    const deskEmail = document.getElementById('user-email-desktop');
+                    if (deskEmail) deskEmail.innerText = user.email || 'Temporary User';
+
                     // Show App, Hide Auth
                     document.getElementById('auth-view').classList.add('hidden');
                     document.getElementById('app-layout').classList.remove('hidden');
@@ -207,7 +233,8 @@
                     document.getElementById('auth-view').classList.remove('hidden');
                     document.getElementById('app-layout').classList.add('hidden');
                     document.getElementById('app-layout').classList.remove('flex');
-                    // Clear listeners to prevent memory leaks if switching accounts
+                    
+                    // Clear listeners
                     unsubscribes.forEach(unsub => unsub());
                     unsubscribes = [];
                 }
@@ -231,16 +258,18 @@
                 }
                 document.getElementById('auth-password').value = '';
             } catch (error) {
-                // Display user friendly error messages
                 showToast(error.message.replace('Firebase: ', '').replace(/\(auth.*\)\./, ''));
             }
         };
 
-        // Added Logout function
+        // Safe Logout that forces a page refresh to clear browser memory
         window.logout = async () => {
             await signOut(auth);
-            state.activeTab = 'dashboard'; // reset view
-            showToast("Logged out successfully");
+            state.activeTab = 'dashboard'; 
+            showToast("Logging out...");
+            setTimeout(() => {
+                window.location.reload(true); // Forces the browser to hard-reload and clear old states
+            }, 800);
         };
 
         function setupListeners() {
@@ -280,10 +309,6 @@
 
         // --- GLOBAL ACTIONS EXPOSED TO WINDOW ---
         window.switchTab = (tab) => { 
-            if (tab === 'logout') {
-                window.logout();
-                return;
-            }
             state.activeTab = tab; 
             renderApp(); 
         };
@@ -438,16 +463,14 @@
                 { id: 'exams', icon: 'calendar', label: 'Exams' },
                 { id: 'timer', icon: 'clock', label: 'Timer' },
                 { id: 'divider', type: 'divider' },
-                { id: 'history', icon: 'history', label: 'History' },
-                { id: 'logout', icon: 'log-out', label: 'Logout', extraClass: 'text-red-600 hover:bg-red-50' }, // Added logout
+                { id: 'history', icon: 'history', label: 'History' }
             ];
 
             const navContainer = document.getElementById('nav-container');
             navContainer.innerHTML = navItems.map(item => {
                 if(item.type === 'divider') return `<div class="hidden md:block my-2 border-t border-[#D5D8C5] shrink-0"></div>`;
                 const isActive = state.activeTab === item.id;
-                const baseClass = item.extraClass ? item.extraClass : 'text-stone-600 hover:bg-[#D5D8C5] hover:text-stone-900';
-                const classes = isActive ? 'bg-[#556B2F] text-white font-semibold shadow-md translate-x-0 md:translate-x-2' : baseClass;
+                const classes = isActive ? 'bg-[#556B2F] text-white font-semibold shadow-md translate-x-0 md:translate-x-2' : 'text-stone-600 hover:bg-[#D5D8C5] hover:text-stone-900';
                 return `
                     <button onclick="switchTab('${item.id}')" class="flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl transition-all flex-shrink-0 justify-center md:justify-start min-w-[64px] ${classes}">
                         <i data-lucide="${item.icon}" class="h-5 w-5 md:h-5 md:w-5"></i>
