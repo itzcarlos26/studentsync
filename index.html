@@ -31,20 +31,13 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyAbxmPrqFkiYHeizx-b0AEOERF7WO_Rn9g",
-            authDomain: "studentsync-a28b5.firebaseapp.com",
-            projectId: "studentsync-a28b5"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+        
+        const supabaseUrl = 'https://aeszyfpgmggpfxjwertc.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlc3p5ZnBnbWdncGZ4andlcnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTYxODAsImV4cCI6MjA5MTAzMjE4MH0.WA22hdQiad4ZMlVgllEfKh6V9DdEdJRNTlb6J1PcoGM';
+        const supabase = createClient(supabaseUrl, supabaseKey);
 
         const leaderId = "103573";
-        let pendingId = "";
 
         window.verifyId = async (e) => {
             e.preventDefault();
@@ -52,24 +45,19 @@
             const btn = document.getElementById('btn-verify');
             
             if (idInput === leaderId) {
-                // It's the leader. Switch to password form.
                 document.getElementById('id-form').classList.add('hidden');
                 document.getElementById('password-form').classList.remove('hidden');
                 document.getElementById('status-text').innerText = "Leader credentials required.";
                 document.getElementById('status-text').classList.add('text-rose-600');
             } else {
-                // It's a team member. Verify with database.
                 btn.innerText = "Checking...";
                 btn.disabled = true;
                 
                 try {
-                    const q = query(collection(db, "team_members"), where("memberId", "==", idInput));
-                    const querySnapshot = await getDocs(q);
+                    const { data, error } = await supabase.from('team_members').select('*').eq('member_id', idInput);
                     
-                    if (!querySnapshot.empty) {
-                        const docSnap = querySnapshot.docs[0];
-                        const memberData = { docId: docSnap.id, ...docSnap.data() };
-                        localStorage.setItem('syncMemberData', JSON.stringify(memberData));
+                    if (data && data.length > 0) {
+                        localStorage.setItem('syncMemberData', JSON.stringify(data[0]));
                         window.location.href = 'member.html';
                     } else {
                         alert("ID not found. Ask your leader to register you.");
