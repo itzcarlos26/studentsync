@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudentSync | Leader Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D5D8C5; border-radius: 10px; }
+        .toast { background: #4B5320; color: white; padding: 12px 24px; border-radius: 8px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; font-weight: bold; }
+        .toast.show { opacity: 1; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-[#F4F5F0] text-stone-900 font-sans h-[100dvh] overflow-hidden flex flex-col md:flex-row">
+
+    <div id="app-layout" class="hidden h-full w-full flex-col md:flex-row relative">
+        
+        <div class="md:hidden bg-[#4B5320] text-white p-4 font-bold text-xl flex items-center justify-between shadow-md z-20 shrink-0">
+            <span>StudentSync Leader</span>
+            <i data-lucide="shield" class="h-6 w-6 text-[#DCD7A0]"></i>
+        </div>
+
+        <nav class="fixed md:relative bottom-0 left-0 w-full md:w-64 bg-[#EAECE4] border-t md:border-t-0 md:border-r z-50 flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:shadow-none">
+            <div class="hidden md:flex bg-[#4B5320] text-white p-6 font-bold text-2xl items-center gap-3 shrink-0">
+                <i data-lucide="shield" class="h-8 w-8 text-[#DCD7A0]"></i>
+                <span>Leader</span>
+            </div>
+            <div class="flex md:flex-col p-2 md:p-4 gap-2 overflow-x-auto md:overflow-y-auto no-scrollbar shrink-0 h-16 md:h-full" id="nav-container">
+                </div>
+        </nav>
+
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 relative" id="app-content">
+            <div class="max-w-6xl mx-auto h-full" id="main-view"></div>
+        </main>
+    </div>
+
+    <div id="toast-container" class="toast"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp, query, orderBy, deleteDoc, doc, updateDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAbxmPrqFkiYHeizx-b0AEOERF7WO_Rn9g",
+            authDomain: "studentsync-a28b5.firebaseapp.com",
+            projectId: "studentsync-a28b5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // State containing original functionality + new syncing features
+        window.state = {
+            activeTab: 'dashboard',
+            courses: [],
+            myTasks: [],
+            exams: [],
+            studySessions: [],
+            teamMembers: [],
+            submissions: [],
+            announcements: [],
+            messages: []
+        };
+
+        window.timerState = {
+            mode: 'stopwatch', isActive: false, timeSeconds: 0, isBreak: false, inputMinutes: 60, courseId: '', intervalRef: null
+        };
+
+        window.showToast = (msg) => {
+            const toast = document.getElementById('toast-container');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        };
+
+        const getCourseCode = (id) => window.state.courses.find(c => c.id === id)?.code || 'Unknown Course';
+
+        // AUTHENTICATION CHECK
+        if (localStorage.getItem('syncRole') !== 'leader') {
+            window.location.href = 'index.html'; // Bounce back to gateway
+        } else {
+            document.getElementById('app-layout').classList.remove('hidden');
+            document.getElementById('app-layout').classList.add('flex');
+            setupListeners();
+            renderApp();
+        }
+
+        window.logout = () => {
+            localStorage.removeItem('syncRole');
+            window.location.href = 'index.html';
+        };
+
+        function setupListeners() {
+            // Personal Collections
+            onSnapshot(collection(db, 'courses'), snap => { window.state.courses = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            onSnapshot(collection(db, 'myTasks'), snap => { window.state.myTasks = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            onSnapshot(collection(db, 'exams'), snap => { window.state.exams = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            onSnapshot(collection(db, 'studySessions'), snap => { window.state.studySessions = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            
+            // Sync Collections
+            onSnapshot(collection(db, 'team_members'), snap => { window.state.teamMembers = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            onSnapshot(query(collection(db, 'submissions'), orderBy('createdAt', 'desc')), snap => { window.state.submissions = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            onSnapshot(query(collection(db, 'announcements'), orderBy('createdAt', 'desc')), snap => { window.state.announcements = snap.docs.map(d => ({id: d.id, ...d.data()})); renderApp(); });
+            onSnapshot(query(collection(db, 'messages'), orderBy('createdAt', 'asc')), snap => { 
+                window.state.messages = snap.docs.map(d => ({id: d.id, ...d.data()})); 
+                if(window.state.activeTab === 'chat') { renderApp(); scrollToBottom(); }
+            });
+        }
+
+        window.switchTab = (tab) => { 
+            if(tab === 'logout') { window.logout(); return; }
+            window.state.activeTab = tab; 
+            renderApp(); 
+        };
+
+        // --- GLOBAL ACTIONS ---
+        window.deleteItem = async (col, id) => {
+            if(confirm("Delete this item?")) {
+                await deleteDoc(doc(db, col, id));
+                showToast("Deleted.");
+            }
+        };
+
+        window.toggleMyTask = async (id) => {
+            const task = window.state.myTasks.find(t => t.id === id);
+            await updateDoc(doc(db, 'myTasks', id), { completed: !task.completed, completedAt: !task.completed ? Date.now() : null });
+        };
+
+        // --- FORM SUBMITS ---
+        window.addCourse = async (e) => {
+            e.preventDefault();
+            await addDoc(collection(db, 'courses'), { code: document.getElementById('c-code').value.toUpperCase(), name: document.getElementById('c-name').value, createdAt: Date.now() });
+            showToast("Course Added"); e.target.reset();
+        };
+
+        window.addMyTask = async (e) => {
+            e.preventDefault();
+            await addDoc(collection(db, 'myTasks'), { title: document.getElementById('t-title').value, courseId: document.getElementById('t-course').value, dueDate: document.getElementById('t-date').value, completed: false, createdAt: Date.now() });
+            showToast("Personal Task Added"); e.target.reset();
+        };
+
+        window.addExam = async (e) => {
+            e.preventDefault();
+            await addDoc(collection(db, 'exams'), { courseId: document.getElementById('e-course').value, type: document.getElementById('e-type').value, date: document.getElementById('e-date').value, createdAt: Date.now() });
+            showToast("Exam Scheduled"); e.target.reset();
+        };
+
+        window.addTeamMember = async (e) => {
+            e.preventDefault();
+            const memberId = document.getElementById('tm-id').value;
+            const courses = Array.from(document.querySelectorAll('input[name="tm-courses"]:checked')).map(cb => cb.value);
+            await addDoc(collection(db, 'team_members'), { memberId: memberId, name: document.getElementById('tm-name').value, courses: courses, createdAt: Date.now() });
+            showToast("Member Registered"); e.target.reset();
+        };
+
+        window.updateSubStatus = async (id, status) => {
+            await updateDoc(doc(db, 'submissions', id), { status: status });
+            showToast(`Status updated to ${status}`);
+        };
+
+        window.addAnnouncement = async (e) => {
+            e.preventDefault();
+            await addDoc(collection(db, 'announcements'), { content: document.getElementById('ann-content').value, createdAt: serverTimestamp() });
+            showToast("Announcement Posted!"); e.target.reset();
+        };
+
+        window.sendMessage = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            if(!input.value.trim()) return;
+            await addDoc(collection(db, 'messages'), { sender: 'Leader (Carlos)', text: input.value, isAdmin: true, createdAt: serverTimestamp() });
+            input.value = '';
+        };
+
+        window.clearChat = async () => {
+            if(confirm("Are you sure you want to clear ALL chat messages? This cannot be undone.")) {
+                const batch = writeBatch(db);
+                const snapshot = await getDocs(collection(db, 'messages'));
+                snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+                await batch.commit();
+                showToast("Chat Cleared");
+            }
+        };
+
+        // --- TIMER LOGIC ---
+        const formatTime = (totalSeconds) => {
+            const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            return window.timerState.mode === 'stopwatch' ? `${h}:${m}:${s}` : `${m}:${s}`;
+        };
+        window.setTimerMode = (mode) => { window.timerState.mode = mode; window.resetTimer(); };
+        window.toggleTimer = () => {
+            const ts = window.timerState;
+            if(!ts.isActive && ts.timeSeconds === 0) {
+                if(ts.mode === 'pomodoro') ts.timeSeconds = ts.isBreak ? 5*60 : 25*60;
+                else if(ts.mode === 'countdown') ts.timeSeconds = ts.inputMinutes * 60;
+            }
+            ts.isActive = !ts.isActive;
+            if(ts.isActive) {
+                ts.intervalRef = setInterval(() => {
+                    if (ts.mode === 'stopwatch') ts.timeSeconds++;
+                    else {
+                        if (ts.timeSeconds <= 1) { clearInterval(ts.intervalRef); ts.isActive = false; ts.timeSeconds = 0; showToast("Time's Up!"); } 
+                        else ts.timeSeconds--;
+                    }
+                    const display = document.getElementById('timer-display-time');
+                    if(display) display.innerText = formatTime(ts.timeSeconds);
+                }, 1000);
+            } else { clearInterval(ts.intervalRef); }
+            renderApp();
+        };
+        window.resetTimer = () => { clearInterval(window.timerState.intervalRef); window.timerState.isActive = false; window.timerState.timeSeconds = 0; renderApp(); };
+        window.finishSession = async () => {
+            const ts = window.timerState;
+            let durationSaved = ts.mode === 'stopwatch' ? ts.timeSeconds : (ts.mode === 'pomodoro' ? (ts.isBreak ? 5*60 : 25*60) - ts.timeSeconds : (ts.inputMinutes * 60) - ts.timeSeconds);
+            if (durationSaved < 5) { showToast("Session too short."); window.resetTimer(); return; }
+            ts.isActive = false; clearInterval(ts.intervalRef);
+            await addDoc(collection(db, 'studySessions'), { courseId: ts.courseId || 'General', duration: durationSaved, timestamp: Date.now(), mode: ts.mode });
+            window.resetTimer(); showToast("Session Saved!");
+        };
+
+        function scrollToBottom() { const chatBox = document.getElementById('chat-box'); if(chatBox) chatBox.scrollTop = chatBox.scrollHeight; }
+
+        function renderApp() {
+            const nav = [
+                { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+                { id: 'courses', icon: 'library', label: 'Courses' },
+                { id: 'myTasks', icon: 'check-circle-2', label: 'My Tasks' },
+                { id: 'divider', type: 'divider' },
+                { id: 'teamMgmt', icon: 'users', label: 'Team Mgmt' },
+                { id: 'submissions', icon: 'inbox', label: 'Submissions' },
+                { id: 'announcements', icon: 'megaphone', label: 'Notices' },
+                { id: 'chat', icon: 'message-circle', label: 'Team Chat' },
+                { id: 'divider2', type: 'divider' },
+                { id: 'exams', icon: 'calendar', label: 'Exams' },
+                { id: 'timer', icon: 'clock', label: 'Timer' },
+                { id: 'history', icon: 'history', label: 'History' },
+                { id: 'logout', icon: 'log-out', label: 'Logout', extraClass: 'text-red-600 hover:bg-red-50' }
+            ];
+
+            document.getElementById('nav-container').innerHTML = nav.map(n => {
+                if(n.type === 'divider') return `<div class="hidden md:block my-2 border-t border-[#D5D8C5] shrink-0"></div>`;
+                return `
+                <button onclick="switchTab('${n.id}')" class="flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl transition-all flex-shrink-0 justify-center md:justify-start min-w-[64px] ${window.state.activeTab === n.id ? 'bg-[#556B2F] text-white font-semibold' : (n.extraClass || 'text-stone-600 hover:bg-[#D5D8C5]')}">
+                    <i data-lucide="${n.icon}" class="h-5 w-5 md:h-5 md:w-5"></i> <span class="text-[10px] md:text-sm">${n.label}</span>
+                </button>`;
+            }).join('');
+
+            const main = document.getElementById('main-view');
+            
+            if (window.state.activeTab === 'dashboard') {
+                const pendingTasks = window.state.myTasks.filter(t => !t.completed).length;
+                const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending').length;
+                
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold text-stone-800 mb-6">Overview</h1>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">My Tasks</p><p class="text-2xl font-black">${pendingTasks}</p></div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-blue-200"><p class="text-xs text-blue-600 font-bold uppercase">New Submissions</p><p class="text-2xl font-black text-blue-700">${reviewNeeded}</p></div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Team Members</p><p class="text-2xl font-black">${window.state.teamMembers.length}</p></div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Exams</p><p class="text-2xl font-black">${window.state.exams.length}</p></div>
+                    </div>
+                `;
+            } else if (window.state.activeTab === 'courses') {
+                const list = window.state.courses.map(c => `
+                    <div class="flex justify-between items-center p-4 border-b last:border-0 bg-white">
+                        <div><span class="font-bold mr-3">${c.code}</span><span class="text-stone-600">${c.name}</span></div>
+                        <button onclick="deleteItem('courses', '${c.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button>
+                    </div>`).join('');
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Courses</h1>
+                    <form onsubmit="addCourse(event)" class="bg-white p-5 rounded-2xl border mb-6 flex gap-3">
+                        <input type="text" id="c-code" placeholder="Code" class="w-32 p-3 border rounded-xl" required>
+                        <input type="text" id="c-name" placeholder="Course Name" class="flex-1 p-3 border rounded-xl" required>
+                        <button type="submit" class="bg-[#4B5320] text-white px-6 rounded-xl font-bold">Add</button>
+                    </form>
+                    <div class="border rounded-2xl overflow-hidden">${list}</div>
+                `;
+            } else if (window.state.activeTab === 'myTasks') {
+                const options = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
+                const list = window.state.myTasks.filter(t=>!t.completed).map(t => `
+                    <div class="flex justify-between p-4 bg-white border rounded-xl mb-3 items-center">
+                        <div class="flex items-center gap-4">
+                            <button onclick="toggleMyTask('${t.id}')" class="h-6 w-6 rounded-full border-2 border-[#D5D8C5]"></button>
+                            <div><p class="font-bold">${t.title}</p><p class="text-xs text-stone-500">${getCourseCode(t.courseId)} | Due: ${t.dueDate}</p></div>
+                        </div>
+                        <button onclick="deleteItem('myTasks', '${t.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button>
+                    </div>`).join('');
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Personal Tasks</h1>
+                    <form onsubmit="addMyTask(event)" class="bg-white p-5 rounded-2xl border mb-6 grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <input type="text" id="t-title" placeholder="Task Name" class="col-span-2 p-3 border rounded-xl" required>
+                        <select id="t-course" class="p-3 border rounded-xl" required><option value="" disabled selected>Course</option>${options}</select>
+                        <input type="date" id="t-date" class="p-3 border rounded-xl" required>
+                        <button type="submit" class="bg-[#4B5320] text-white p-3 rounded-xl font-bold col-span-1 md:col-span-4">Add Task</button>
+                    </form>
+                    <div>${list}</div>
+                `;
+            } else if (window.state.activeTab === 'teamMgmt') {
+                const checkboxes = window.state.courses.map(c => `
+                    <label class="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer hover:bg-stone-100">
+                        <input type="checkbox" name="tm-courses" value="${c.id}" class="w-4 h-4 text-[#556B2F]">
+                        <span class="text-sm font-bold text-stone-700">${c.code}</span>
+                    </label>
+                `).join('');
+
+                const list = window.state.teamMembers.map(m => `
+                    <div class="p-4 bg-white border rounded-xl flex justify-between items-center mb-3">
+                        <div>
+                            <p class="font-bold text-lg">${m.name} <span class="text-sm font-normal text-stone-500 ml-2">ID: ${m.memberId}</span></p>
+                            <div class="flex gap-2 mt-2">${m.courses.map(cid => `<span class="px-2 py-1 bg-[#EAECE4] text-xs rounded font-bold text-stone-700">${getCourseCode(cid)}</span>`).join('')}</div>
+                        </div>
+                        <button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button>
+                    </div>
+                `).join('') || '<p class="text-stone-500 text-center py-8">No team members registered.</p>';
+
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Team Management</h1>
+                    <form onsubmit="addTeamMember(event)" class="bg-white p-6 rounded-2xl border mb-8">
+                        <h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> Register New Member</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-stone-50" required>
+                            <input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-stone-50" required>
+                        </div>
+                        <p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes || '<span class="text-sm text-stone-400">Add courses in the Courses tab first.</span>'}</div>
+                        <button type="submit" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button>
+                    </form>
+                    <div>${list}</div>
+                `;
+            } else if (window.state.activeTab === 'submissions') {
+                const getStatusColor = (status) => {
+                    if(status === 'Pending') return 'bg-blue-50 border-blue-200 text-blue-800';
+                    if(status === 'Reviewing') return 'bg-orange-50 border-orange-200 text-orange-800';
+                    if(status === 'Approved') return 'bg-green-50 border-green-200 text-green-800';
+                    if(status === 'Rejected') return 'bg-red-50 border-red-200 text-red-800';
+                };
+
+                const list = window.state.submissions.map(s => `
+                    <div class="p-4 border-2 rounded-xl mb-3 flex flex-col md:flex-row justify-between md:items-center gap-4 ${getStatusColor(s.status)}">
+                        <div>
+                            <p class="font-bold text-lg">${s.title}</p>
+                            <p class="text-sm">Submitted by: <span class="font-bold">${s.memberName}</span> | Course: ${getCourseCode(s.courseId)}</p>
+                            <a href="${s.link}" target="_blank" class="text-sm underline font-bold mt-1 inline-block">View Link</a>
+                        </div>
+                        <div class="flex gap-2">
+                            <select onchange="updateSubStatus('${s.id}', this.value)" class="p-2 border rounded-lg bg-white font-bold text-sm outline-none">
+                                <option value="Pending" ${s.status === 'Pending' ? 'selected' : ''}>🔵 Pending</option>
+                                <option value="Reviewing" ${s.status === 'Reviewing' ? 'selected' : ''}>🟠 Reviewing</option>
+                                <option value="Approved" ${s.status === 'Approved' ? 'selected' : ''}>🟢 Approved</option>
+                                <option value="Rejected" ${s.status === 'Rejected' ? 'selected' : ''}>🔴 Rejected</option>
+                            </select>
+                            <button onclick="deleteItem('submissions', '${s.id}')" class="p-2 bg-white rounded-lg hover:bg-stone-100 text-stone-500"><i data-lucide="trash"></i></button>
+                        </div>
+                    </div>
+                `).join('') || '<p class="text-stone-500 text-center py-8">No submissions yet.</p>';
+
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Submitted Tasks</h1>
+                    <div class="bg-white p-4 rounded-xl border mb-6 flex gap-4 text-xs font-bold justify-center flex-wrap">
+                        <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200">Pending (Member can edit)</span>
+                        <span class="px-3 py-1 bg-orange-50 text-orange-700 rounded-full border border-orange-200">Reviewing (Locked)</span>
+                        <span class="px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200">Approved (Locked)</span>
+                        <span class="px-3 py-1 bg-red-50 text-red-700 rounded-full border border-red-200">Rejected (Forces Resubmit)</span>
+                    </div>
+                    <div>${list}</div>
+                `;
+            } else if (window.state.activeTab === 'announcements') {
+                const list = window.state.announcements.map(a => `
+                    <div class="p-4 bg-white border rounded-xl mb-3 flex justify-between">
+                        <p>${a.content}</p>
+                        <button onclick="deleteItem('announcements', '${a.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button>
+                    </div>
+                `).join('');
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Broadcast Announcement</h1>
+                    <form onsubmit="addAnnouncement(event)" class="mb-8">
+                        <textarea id="ann-content" placeholder="Type announcement..." class="w-full p-4 border rounded-xl bg-white min-h-[100px] mb-3" required></textarea>
+                        <button type="submit" class="bg-[#8B4513] text-white px-6 py-3 rounded-lg font-bold">Post Notice</button>
+                    </form>
+                    <div>${list}</div>
+                `;
+            } else if (window.state.activeTab === 'chat') {
+                const list = window.state.messages.map(m => `
+                    <div class="mb-4 flex ${m.isAdmin ? 'justify-end' : 'justify-start'} group">
+                        ${!m.isAdmin ? `<button onclick="deleteItem('messages', '${m.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-red-500 transition-opacity"><i data-lucide="trash-2" class="h-4 w-4"></i></button>` : ''}
+                        <div class="${m.isAdmin ? 'text-right' : 'text-left'}">
+                            <span class="text-[10px] text-stone-500 font-bold uppercase">${m.sender}</span>
+                            <div class="inline-block p-3 rounded-xl max-w-sm text-sm ${m.isAdmin ? 'bg-[#556B2F] text-white rounded-br-none' : 'bg-white border rounded-bl-none'}">${m.text}</div>
+                        </div>
+                        ${m.isAdmin ? `<button onclick="deleteItem('messages', '${m.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-red-500 transition-opacity"><i data-lucide="trash-2" class="h-4 w-4"></i></button>` : ''}
+                    </div>
+                `).join('');
+                main.innerHTML = `
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold">Team Chat</h1>
+                        <button onclick="clearChat()" class="text-red-600 font-bold text-sm px-4 py-2 bg-red-50 rounded-lg border border-red-200 hover:bg-red-100"><i data-lucide="alert-triangle" class="inline w-4 h-4 mr-1"></i> Clear All</button>
+                    </div>
+                    <div class="flex flex-col h-[500px] bg-stone-50 rounded-xl border">
+                        <div id="chat-box" class="flex-1 p-4 overflow-y-auto">${list}</div>
+                        <form onsubmit="sendMessage(event)" class="p-4 bg-white border-t flex gap-2 rounded-b-xl">
+                            <input type="text" id="chat-input" placeholder="Type a message..." class="flex-1 p-3 border rounded-lg" autocomplete="off">
+                            <button type="submit" class="bg-[#4B5320] text-white px-6 rounded-lg font-bold">Send</button>
+                        </form>
+                    </div>
+                `;
+            } else if (window.state.activeTab === 'exams') {
+                const list = window.state.exams.map(e => `
+                    <div class="bg-white p-6 rounded-2xl border flex justify-between relative group">
+                        <div><span class="text-xs font-black text-rose-700 uppercase">${e.type}</span><h3 class="text-xl font-bold">${getCourseCode(e.courseId)}</h3><p class="text-sm mt-2"><i data-lucide="calendar" class="inline w-4 h-4"></i> ${e.date}</p></div>
+                        <button onclick="deleteItem('exams', '${e.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button>
+                    </div>`).join('');
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Exams</h1>
+                    <form onsubmit="addExam(event)" class="bg-white p-5 rounded-2xl border mb-6 flex gap-3"><select id="e-course" class="p-3 border rounded-xl"><option value="">Course</option>${window.state.courses.map(c=>`<option value="${c.id}">${c.code}</option>`)}</select><select id="e-type" class="p-3 border rounded-xl"><option>Quiz</option><option>Midterm</option><option>Final</option></select><input type="date" id="e-date" class="p-3 border rounded-xl" required><button type="submit" class="bg-rose-700 text-white px-6 rounded-xl font-bold">Add</button></form>
+                    <div class="grid grid-cols-2 gap-4">${list}</div>
+                `;
+            } else if (window.state.activeTab === 'timer') {
+                const ts = window.timerState;
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Timer</h1>
+                    <div class="p-8 rounded-[2rem] border-4 flex flex-col items-center bg-white mb-6">
+                        <div id="timer-display-time" class="text-7xl font-black mb-10 text-stone-800">00:00:00</div>
+                        <div class="flex gap-4"><button onclick="toggleTimer()" class="px-8 py-4 rounded-xl font-black text-white bg-[#4B5320] hover:bg-[#556B2F] uppercase">${ts.isActive ? 'Pause' : 'Start'}</button><button onclick="resetTimer()" class="px-6 py-4 rounded-xl font-bold bg-[#EAECE4]">Reset</button><button onclick="finishSession()" class="px-6 py-4 rounded-xl font-bold bg-[#8B4513] text-white">Save</button></div>
+                    </div>
+                `;
+            } else if (window.state.activeTab === 'history') {
+                const list = window.state.myTasks.filter(t=>t.completed).map(t => `<div class="p-4 border-b bg-white"><p class="line-through font-bold">${t.title}</p></div>`).join('');
+                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">History</h1><div class="border rounded-2xl overflow-hidden">${list}</div>`;
+            }
+            lucide.createIcons();
+            if(window.state.activeTab === 'timer' && document.getElementById('timer-display-time')) document.getElementById('timer-display-time').innerText = formatTime(window.timerState.timeSeconds);
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
