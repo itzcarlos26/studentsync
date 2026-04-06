@@ -165,12 +165,49 @@
             showToast("Exam Scheduled"); e.target.reset(); fetchAllData();
         };
 
+        // --- UPDATED: Team Member Edit Logic ---
+        window.editTeamMember = (docId, memberId, name, coursesStr) => {
+            document.getElementById('tm-doc-id').value = docId;
+            document.getElementById('tm-id').value = memberId;
+            document.getElementById('tm-name').value = name;
+            
+            const courseArr = coursesStr ? coursesStr.split(',') : [];
+            document.querySelectorAll('input[name="tm-courses"]').forEach(cb => {
+                cb.checked = courseArr.includes(cb.value);
+            });
+            
+            document.getElementById('tm-form-title').innerText = "Edit Member Details";
+            document.getElementById('tm-submit-btn').innerText = "Save Changes";
+            document.getElementById('tm-cancel-btn').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.cancelEditTm = () => {
+            const form = document.getElementById('tm-form');
+            if(form) form.reset();
+            document.getElementById('tm-doc-id').value = '';
+            document.getElementById('tm-form-title').innerText = "Register New Member";
+            document.getElementById('tm-submit-btn').innerText = "Register Member";
+            document.getElementById('tm-cancel-btn').classList.add('hidden');
+        };
+
         window.addTeamMember = async (e) => {
             e.preventDefault();
+            const docId = document.getElementById('tm-doc-id').value;
             const memberId = document.getElementById('tm-id').value;
+            const name = document.getElementById('tm-name').value;
             const courses = Array.from(document.querySelectorAll('input[name="tm-courses"]:checked')).map(cb => cb.value);
-            await supabase.from('team_members').insert([{ member_id: memberId, name: document.getElementById('tm-name').value, courses: courses, created_at: Date.now() }]);
-            showToast("Member Registered"); e.target.reset(); fetchAllData();
+            
+            if (docId) {
+                await supabase.from('team_members').update({ member_id: memberId, name: name, courses: courses }).eq('id', docId);
+                showToast("Member Updated");
+            } else {
+                await supabase.from('team_members').insert([{ member_id: memberId, name: name, courses: courses, created_at: Date.now() }]);
+                showToast("Member Registered");
+            }
+            
+            window.cancelEditTm();
+            fetchAllData();
         };
 
         window.updateSubStatus = async (id, status) => {
@@ -329,21 +366,26 @@
                             <p class="font-bold text-lg">${m.name} <span class="text-sm font-normal text-stone-500 ml-2">ID: ${m.member_id}</span></p>
                             <div class="flex gap-2 mt-2">${(m.courses || []).map(cid => `<span class="px-2 py-1 bg-[#EAECE4] text-xs rounded font-bold text-stone-700">${getCourseCode(cid)}</span>`).join('')}</div>
                         </div>
-                        <button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button>
+                        <div class="flex gap-2">
+                            <button onclick="editTeamMember('${m.id}', '${m.member_id}', '${m.name.replace(/'/g, "\\'")}', '${(m.courses || []).join(',')}')" class="text-blue-500 bg-blue-50 p-3 rounded-lg hover:bg-blue-100"><i data-lucide="edit"></i></button>
+                            <button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button>
+                        </div>
                     </div>
                 `).join('') || '<p class="text-stone-500 text-center py-8">No team members registered.</p>';
 
                 main.innerHTML = `
                     <h1 class="text-3xl font-bold mb-6">Team Management</h1>
-                    <form onsubmit="addTeamMember(event)" class="bg-white p-6 rounded-2xl border mb-8">
-                        <h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> Register New Member</h2>
+                    <form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8">
+                        <h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2>
+                        <input type="hidden" id="tm-doc-id" value="">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-stone-50" required>
                             <input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-stone-50" required>
                         </div>
                         <p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes || '<span class="text-sm text-stone-400">Add courses in the Courses tab first.</span>'}</div>
-                        <button type="submit" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button>
+                        <button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button>
+                        <button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button>
                     </form>
                     <div>${list}</div>
                 `;
