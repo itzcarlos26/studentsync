@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudentSync | Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#F4F5F0] text-stone-900 font-sans h-[100dvh] overflow-hidden flex items-center justify-center p-4">
+
+    <div class="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-[#EAECE4] relative overflow-hidden">
+        <div class="flex justify-center mb-4">
+            <div class="p-4 bg-[#F4F5F0] rounded-full">
+                <i data-lucide="layers" class="h-10 w-10 text-[#4B5320]"></i>
+            </div>
+        </div>
+        <h2 class="text-2xl font-black text-center text-stone-800 mb-2">StudentSync Gateway</h2>
+        <p class="text-center text-sm text-stone-500 mb-6" id="status-text">Enter your ID to access your workspace.</p>
+
+        <form id="id-form" onsubmit="verifyId(event)">
+            <input type="text" id="user-id" placeholder="Enter ID (e.g., 103573 or 106122)" class="w-full p-4 border rounded-xl bg-[#F9FAF8] mb-4 text-center font-bold text-lg outline-none focus:border-[#4B5320]" required>
+            <button type="submit" id="btn-verify" class="w-full bg-[#4B5320] text-white p-4 rounded-xl font-bold hover:bg-[#556B2F] transition-colors">Continue</button>
+        </form>
+
+        <form id="password-form" class="hidden" onsubmit="loginLeader(event)">
+            <input type="password" id="leader-pass" placeholder="Enter Leader Password" class="w-full p-4 border rounded-xl bg-[#F9FAF8] mb-4 text-center font-bold text-lg outline-none focus:border-[#4B5320]" required>
+            <button type="submit" class="w-full bg-[#8B4513] text-white p-4 rounded-xl font-bold hover:bg-[#A0522D] transition-colors">Access Dashboard</button>
+            <button type="button" onclick="resetForm()" class="w-full mt-2 text-stone-500 text-sm font-bold p-2 hover:text-stone-800">Cancel</button>
+        </form>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAbxmPrqFkiYHeizx-b0AEOERF7WO_Rn9g",
+            authDomain: "studentsync-a28b5.firebaseapp.com",
+            projectId: "studentsync-a28b5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const leaderId = "103573";
+        let pendingId = "";
+
+        window.verifyId = async (e) => {
+            e.preventDefault();
+            const idInput = document.getElementById('user-id').value.trim();
+            const btn = document.getElementById('btn-verify');
+            
+            if (idInput === leaderId) {
+                // It's the leader. Switch to password form.
+                document.getElementById('id-form').classList.add('hidden');
+                document.getElementById('password-form').classList.remove('hidden');
+                document.getElementById('status-text').innerText = "Leader credentials required.";
+                document.getElementById('status-text').classList.add('text-rose-600');
+            } else {
+                // It's a team member. Verify with database.
+                btn.innerText = "Checking...";
+                btn.disabled = true;
+                
+                try {
+                    const q = query(collection(db, "team_members"), where("memberId", "==", idInput));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (!querySnapshot.empty) {
+                        const docSnap = querySnapshot.docs[0];
+                        const memberData = { docId: docSnap.id, ...docSnap.data() };
+                        localStorage.setItem('syncMemberData', JSON.stringify(memberData));
+                        window.location.href = 'member.html';
+                    } else {
+                        alert("ID not found. Ask your leader to register you.");
+                        btn.innerText = "Continue";
+                        btn.disabled = false;
+                    }
+                } catch (error) {
+                    alert("Error connecting to database.");
+                    btn.innerText = "Continue";
+                    btn.disabled = false;
+                }
+            }
+        };
+
+        window.loginLeader = (e) => {
+            e.preventDefault();
+            const pass = document.getElementById('leader-pass').value;
+            if (pass === "Carlos@103573") {
+                localStorage.setItem('syncRole', 'leader');
+                window.location.href = 'leader.html';
+            } else {
+                alert("Incorrect Password.");
+            }
+        };
+
+        window.resetForm = () => {
+            document.getElementById('id-form').classList.remove('hidden');
+            document.getElementById('password-form').classList.add('hidden');
+            document.getElementById('status-text').innerText = "Enter your ID to access your workspace.";
+            document.getElementById('status-text').classList.remove('text-rose-600');
+            document.getElementById('user-id').value = "";
+            document.getElementById('leader-pass').value = "";
+        };
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
