@@ -1,0 +1,18 @@
+Main Link:
+https://itzcarlos26.github.io/studentsync/index.html
+
+Database info:
+Database Supabase
+Name: StudentSync
+Database password:Ch&f74qS?FNbT42
+
+
+API Keys
+anon: 
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlc3p5ZnBnbWdncGZ4andlcnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTYxODAsImV4cCI6MjA5MTAzMjE4MH0.WA22hdQiad4ZMlVgllEfKh6V9DdEdJRNTlb6J1PcoGM
+
+service_role:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlc3p5ZnBnbWdncGZ4andlcnRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQ1NjE4MCwiZXhwIjoyMDkxMDMyMTgwfQ.qdLzZt8jGMB6GmMNkAFVlKmwtrrUpkskaoVJDo_WIHI
+
+
+https://aeszyfpgmggpfxjwertc.supabase.co
