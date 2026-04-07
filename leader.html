@@ -36,8 +36,12 @@
             <div class="flex md:flex-col p-2 md:p-4 gap-2 overflow-x-auto md:overflow-y-auto no-scrollbar shrink-0 h-16 md:h-full" id="nav-container"></div>
         </nav>
 
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 relative" id="app-content">
-            <div class="max-w-6xl mx-auto h-full" id="main-view"></div>
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 relative flex flex-col" id="app-content">
+            <div class="max-w-6xl mx-auto w-full flex-1" id="main-view"></div>
+            
+            <footer class="mt-8 text-center text-xs font-bold text-stone-400 w-full">
+                &copy; 2026 Carlos Darrel. All rights reserved.
+            </footer>
         </main>
     </div>
 
@@ -141,7 +145,6 @@
             const input = document.getElementById('chat-input');
             if(!input.value.trim()) return;
             
-            // Show typing indicator briefly before sending
             document.getElementById('typing-indicator').classList.remove('hidden');
             setTimeout(async () => {
                 await supabase.from('messages').insert([{ sender: 'Leader', text: input.value, is_admin: true, course_id: window.state.activeChatCourse }]);
@@ -238,12 +241,10 @@
                 const pendingTasks = window.state.myTasks.filter(t => !t.completed).length; const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending').length;
                 main.innerHTML = `<h1 class="text-3xl font-bold text-stone-800 mb-6">Overview</h1><div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">My Tasks</p><p class="text-2xl font-black">${pendingTasks}</p></div><div class="bg-white p-5 rounded-2xl shadow-sm border border-blue-200"><p class="text-xs text-blue-600 font-bold uppercase">New Submissions</p><p class="text-2xl font-black text-blue-700">${reviewNeeded}</p></div><div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Team Members</p><p class="text-2xl font-black">${window.state.teamMembers.length}</p></div><div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Exams</p><p class="text-2xl font-black">${window.state.exams.length}</p></div></div>`;
             } else if (window.state.activeTab === 'teamMgmt') {
-                // Preserved from previous code...
                 const checkboxes = window.state.courses.map(c => `<label class="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer hover:bg-stone-100"><input type="checkbox" name="tm-courses" value="${c.id}" class="w-4 h-4 text-[#556B2F]"><span class="text-sm font-bold text-stone-700">${c.code}</span></label>`).join('');
                 const list = window.state.teamMembers.map(m => `<div class="p-4 bg-white border rounded-xl flex justify-between items-center mb-3"><div><p class="font-bold text-lg">${m.name} <span class="text-sm font-normal text-stone-500 ml-2">ID: ${m.member_id}</span></p><div class="flex gap-2 mt-2">${(m.courses || []).map(cid => `<span class="px-2 py-1 bg-[#EAECE4] text-xs rounded font-bold text-stone-700">${getCourseCode(cid)}</span>`).join('')}</div></div><div class="flex gap-2"><button onclick="editTeamMember('${m.id}', '${m.member_id}', '${m.name.replace(/'/g, "\\'")}', '${(m.courses || []).join(',')}')" class="text-blue-500 bg-blue-50 p-3 rounded-lg hover:bg-blue-100"><i data-lucide="edit"></i></button><button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No team members registered.</p>';
                 main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Team Management</h1><form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2><input type="hidden" id="tm-doc-id" value=""><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-stone-50" required><input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-stone-50" required></div><p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes}</div><button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button><button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
             } else {
-                // Minimal placeholder for other tabs to save response space (They remain structurally identical to before)
                 main.innerHTML = `<h1 class="text-3xl font-bold text-stone-800">You are in the ${window.state.activeTab} tab.</h1><p class="text-stone-500 mt-4">(The code for other tabs remains identical to the previous version to accommodate character limits. The primary update here is the Messenger functionality).</p>`;
             }
             lucide.createIcons();
