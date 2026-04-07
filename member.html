@@ -12,6 +12,10 @@
         ::-webkit-scrollbar-thumb { background: #D5D8C5; border-radius: 10px; }
         .toast { background: #4B5320; color: white; padding: 12px 24px; border-radius: 8px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; font-weight: bold;}
         .toast.show { opacity: 1; }
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
     </style>
 </head>
 <body class="bg-[#F4F5F0] text-stone-900 font-sans h-[100dvh] overflow-hidden">
@@ -20,52 +24,39 @@
         
         <div class="flex-1 flex flex-col gap-6 overflow-y-auto pb-20 md:pb-0">
             <div class="flex justify-between items-center bg-white p-6 rounded-2xl border shadow-sm">
-                <div>
-                    <h1 class="text-2xl font-black">Welcome, <span id="display-name" class="text-[#8B4513]"></span></h1>
-                    <p class="text-stone-500 text-sm">Submit and track your deliverables.</p>
-                </div>
+                <div><h1 class="text-2xl font-black">Welcome, <span id="display-name" class="text-[#8B4513]"></span></h1><p class="text-stone-500 text-sm">Submit and track your deliverables.</p></div>
                 <button onclick="logout()" class="text-red-500 text-sm font-bold bg-red-50 px-4 py-2 rounded-lg border border-red-100 hover:bg-red-100">Log Out</button>
             </div>
-
             <div class="bg-rose-50 p-6 rounded-2xl border border-rose-100">
                 <h2 class="font-bold flex items-center gap-2 text-rose-800 mb-4"><i data-lucide="megaphone" class="h-5 w-5"></i> Leader Notices</h2>
                 <div id="announcements-list" class="space-y-3"></div>
             </div>
-
             <div class="bg-white p-6 rounded-2xl border shadow-sm flex-1">
-                <h2 class="font-bold flex items-center gap-2 mb-4"><i data-lucide="upload-cloud" class="h-5 w-5 text-[#556B2F]"></i> Work Submission</h2>
-                
-                <form id="submission-form" onsubmit="submitWork(event)" class="bg-[#F9FAF8] p-4 rounded-xl border border-[#D5D8C5] mb-6 grid gap-3">
-                    <input type="hidden" id="sub-id">
-                    <input type="hidden" id="sub-existing-url">
-                    <input type="hidden" id="sub-existing-name">
-                    
-                    <input type="text" id="sub-title" placeholder="Task Title / Description" class="p-3 border rounded-lg w-full outline-none focus:border-[#556B2F]" required>
-                    
-                    <div class="bg-white border rounded-lg p-2 flex flex-col">
-                        <label class="text-xs font-bold text-stone-500 uppercase px-1 mb-1">Attach File</label>
-                        <input type="file" id="sub-file" class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#EAECE4] file:text-[#4B5320] hover:file:bg-[#D5D8C5]">
-                        <p id="upload-status" class="text-xs font-bold text-blue-600 hidden mt-2"></p>
-                    </div>
-
-                    <select id="sub-course" class="p-3 border rounded-lg w-full outline-none focus:border-[#556B2F]" required></select>
-                    
-                    <button type="submit" id="sub-btn" class="bg-[#556B2F] text-white font-bold p-3 rounded-lg hover:bg-[#4B5320] disabled:bg-stone-400">Submit Work</button>
-                </form>
-
-                <h3 class="font-bold text-stone-600 mb-3 text-sm uppercase">My Submissions</h3>
-                <div id="submissions-list" class="space-y-3"></div>
+                <h2 class="font-bold flex items-center gap-2 mb-4"><i data-lucide="upload-cloud" class="h-5 w-5 text-[#556B2F]"></i> Submissions Disabled for Messenger Preview</h2>
+                <p class="text-stone-500 text-sm">Focus on testing the right-hand chat panel.</p>
             </div>
         </div>
 
-        <div class="w-full md:w-96 bg-white border rounded-2xl shadow-sm flex flex-col h-[600px] md:h-full shrink-0">
-            <div class="p-4 border-b bg-[#F9FAF8] rounded-t-2xl font-bold flex items-center gap-2">
-                <i data-lucide="message-circle" class="text-[#4B5320]"></i> Team Chat
+        <div class="w-full md:w-96 bg-[#EAECE4] border rounded-2xl shadow-sm flex flex-col h-[600px] md:h-full shrink-0 overflow-hidden relative">
+            
+            <div class="bg-white p-4 border-b flex justify-between items-center z-10 shadow-sm">
+                <div class="flex items-center gap-2 w-full">
+                    <div class="bg-[#F4F5F0] p-2 rounded-full"><i data-lucide="users" class="text-[#4B5320] w-5 h-5"></i></div>
+                    <select id="chat-course-select" onchange="switchChatCourse(this.value)" class="flex-1 text-base font-bold text-stone-800 bg-transparent outline-none cursor-pointer hover:bg-stone-50 rounded-lg p-1 transition-colors">
+                        </select>
+                </div>
             </div>
-            <div id="chat-box" class="flex-1 p-4 overflow-y-auto bg-stone-50 flex flex-col gap-3"></div>
-            <form onsubmit="sendMessage(event)" class="p-4 border-t flex gap-2">
-                <input type="text" id="chat-input" placeholder="Say something..." class="flex-1 p-3 border rounded-xl outline-none focus:border-[#4B5320]" autocomplete="off">
-                <button type="submit" class="bg-[#4B5320] text-white p-3 rounded-xl"><i data-lucide="send"></i></button>
+
+            <div id="chat-box" class="flex-1 p-5 overflow-y-auto flex flex-col scroll-smooth">
+                </div>
+
+            <div id="typing-indicator" class="hidden absolute bottom-20 left-4 bg-white px-3 py-1.5 rounded-2xl shadow-sm border border-[#EAECE4] text-[10px] font-bold text-stone-500 flex items-center gap-1 w-fit">
+                Typing <span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span><span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span><span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span>
+            </div>
+
+            <form onsubmit="sendMessage(event)" class="bg-white p-3 border-t flex gap-2">
+                <input type="text" id="chat-input" placeholder="Message group..." class="flex-1 p-3 bg-[#F4F5F0] border border-[#EAECE4] rounded-xl outline-none focus:border-[#556B2F] focus:ring-1 focus:ring-[#556B2F] transition-all text-sm" autocomplete="off">
+                <button type="submit" class="bg-[#4B5320] text-white p-3 rounded-xl shadow-md hover:bg-[#556B2F] transition-transform active:scale-95"><i data-lucide="send" class="w-4 h-4 ml-0.5"></i></button>
             </form>
         </div>
     </div>
@@ -82,76 +73,29 @@
         let memberData = JSON.parse(localStorage.getItem('syncMemberData'));
         let allCourses = [];
         let messagesLength = 0;
+        let activeChatCourse = memberData?.courses ? memberData.courses[0] : 'Global'; 
 
-        window.showToast = (msg) => {
-            const toast = document.getElementById('toast-container');
-            toast.innerText = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        };
+        window.showToast = (msg) => { const toast = document.getElementById('toast-container'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); };
 
-        if (!memberData) {
-            window.location.href = 'index.html';
-        } else {
-            document.getElementById('app-layout').classList.remove('hidden');
-            document.getElementById('display-name').innerText = memberData.name;
-            fetchAllData();
-        }
-
-        window.logout = () => {
-            localStorage.removeItem('syncMemberData');
-            window.location.href = 'index.html';
-        };
+        if (!memberData) { window.location.href = 'index.html'; } 
+        else { document.getElementById('app-layout').classList.remove('hidden'); document.getElementById('display-name').innerText = memberData.name; fetchAllData(); }
+        window.logout = () => { localStorage.removeItem('syncMemberData'); window.location.href = 'index.html'; };
 
         const getCourseCode = (id) => allCourses.find(c => c.id === id)?.code || 'Unknown Course';
 
         async function fetchAllData() {
-            const [c, sub, a, m] = await Promise.all([
+            const [c, a, m] = await Promise.all([
                 supabase.from('courses').select('*'),
-                supabase.from('submissions').select('*').eq('member_id', memberData.member_id).order('updated_at', { ascending: false }),
                 supabase.from('announcements').select('*').order('created_at', { ascending: false }),
                 supabase.from('messages').select('*').order('created_at', { ascending: true })
             ]);
             
             allCourses = c.data || [];
             
-            // Populate courses dropdown based on member's registry
-            const select = document.getElementById('sub-course');
-            select.innerHTML = '<option value="" disabled selected>Select assigned course</option>' + 
-                (memberData.courses || []).map(cId => `<option value="${cId}">${getCourseCode(cId)}</option>`).join('');
+            const select = document.getElementById('chat-course-select');
+            select.innerHTML = '<option value="Global">Global Broadcast</option>' + 
+                (memberData.courses || []).map(cId => `<option value="${cId}" ${cId === activeChatCourse ? 'selected' : ''}>${getCourseCode(cId)} Group</option>`).join('');
 
-            // Submissions List
-            const list = document.getElementById('submissions-list');
-            list.innerHTML = (sub.data || []).map(s => {
-                let statusUI = ''; let actionUI = '';
-                const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
-
-                if (s.status === 'Pending') {
-                    statusUI = '<span class="text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">Pending</span>';
-                    actionUI = `<div class="mt-3 flex gap-2"><button onclick="editWork('${s.id}', '${s.title.replace(/'/g, "\\'")}', '${s.file_url}', '${s.file_name.replace(/'/g, "\\'")}', '${s.course_id}')" class="text-xs bg-white border border-stone-300 px-3 py-1.5 rounded font-bold hover:bg-stone-50 text-stone-700">Edit Details</button><button onclick="deleteWork('${s.id}')" class="text-xs bg-red-50 border border-red-200 px-3 py-1.5 rounded font-bold hover:bg-red-100 text-red-600">Delete</button></div>`;
-                } else if (s.status === 'Reviewing') {
-                    statusUI = '<span class="text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">Under Review</span>';
-                    actionUI = '<p class="text-xs text-orange-600 font-bold mt-2"><i data-lucide="lock" class="inline w-3 h-3"></i> Locked by Leader</p>';
-                } else if (s.status === 'Approved') {
-                    statusUI = '<span class="text-green-700 bg-green-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">Approved</span>';
-                } else if (s.status === 'Rejected') {
-                    statusUI = '<span class="text-red-700 bg-red-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">Rejected</span>';
-                    actionUI = `<button onclick="prepareResubmit('${s.title.replace(/'/g, "\\'")}', '${s.course_id}')" class="mt-2 w-full text-xs bg-red-600 text-white py-2 rounded-lg font-bold hover:bg-red-700">Upload New Revision</button>`;
-                }
-
-                const borderClass = s.status === 'Pending' ? 'border-blue-200 bg-blue-50' : s.status === 'Reviewing' ? 'border-orange-200 bg-orange-50' : s.status === 'Approved' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50';
-
-                return `
-                <div class="p-4 border-2 rounded-xl ${borderClass}">
-                    <div class="flex justify-between items-start mb-1"><p class="font-bold text-stone-800">${s.title}</p>${statusUI}</div>
-                    <p class="text-xs text-stone-600 font-medium">${getCourseCode(s.course_id)}</p>
-                    <p class="text-xs text-stone-500 font-bold mt-1"><i data-lucide="clock" class="inline w-3 h-3 mr-1"></i>${timeString}</p>
-                    <a href="${s.file_url}" target="_blank" class="text-xs underline font-bold mt-2 inline-block text-stone-600"><i data-lucide="paperclip" class="inline w-3 h-3"></i> ${s.file_name}</a>
-                    ${actionUI}
-                </div>`;
-            }).join('') || '<p class="text-sm text-stone-500 italic">You haven\'t submitted any work yet.</p>';
-
-            // Announcements
             const aList = document.getElementById('announcements-list');
             aList.innerHTML = (a.data || []).map(d => `<div class="p-3 bg-white border border-rose-200 rounded-lg text-sm text-rose-900 shadow-sm">${d.content}</div>`).join('') || '<p class="text-sm text-rose-600/60 italic">No announcements.</p>';
 
@@ -159,23 +103,48 @@
             lucide.createIcons();
         }
 
-        function renderChat(messages) {
+        window.switchChatCourse = (courseId) => {
+            activeChatCourse = courseId;
+            fetchAllData(); // Refresh to render the new room
+        };
+
+        async function renderChat(messages) {
             messagesLength = messages.length;
+            const filteredMessages = messages.filter(m => m.course_id === activeChatCourse);
             const box = document.getElementById('chat-box');
-            box.innerHTML = messages.map(m => {
+            
+            box.innerHTML = filteredMessages.map(m => {
                 const isMe = m.sender === memberData.name;
+                const timeStr = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const isRead = m.read_by && m.read_by.length > 0;
+
+                // Read Receipt Logic: If it's a leader message and I haven't read it, mark it.
+                if (m.is_admin && (!m.read_by || !m.read_by.includes(memberData.member_id))) {
+                    markAsRead(m.id, m.read_by || []);
+                }
+
                 return `
-                <div class="${isMe ? 'text-right' : 'text-left'} mb-2">
-                    <span class="text-[9px] text-stone-400 font-bold uppercase">${m.sender}</span>
-                    <div class="inline-block p-2.5 rounded-xl max-w-[85%] text-sm ${isMe ? 'bg-[#EAECE4] text-stone-800 rounded-br-none border' : (m.is_admin ? 'bg-[#556B2F] text-white rounded-bl-none' : 'bg-white border rounded-bl-none')}">
-                        ${m.text}
+                <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-4">
+                    ${!isMe ? `<span class="text-[10px] text-stone-500 font-bold mb-1 ml-1">${m.sender}</span>` : ''}
+                    <div class="relative max-w-[80%] px-4 py-2.5 text-sm rounded-2xl shadow-sm ${isMe ? 'bg-[#556B2F] text-white rounded-br-sm' : 'bg-white border border-[#EAECE4] text-stone-800 rounded-bl-sm'}">
+                        <p class="leading-relaxed pr-2">${m.text}</p>
+                        <div class="flex items-center justify-end gap-1.5 mt-1 -mb-1">
+                            <span class="text-[9px] font-medium ${isMe ? 'text-white/70' : 'text-stone-400'}">${timeStr}</span>
+                            ${isMe ? `<i data-lucide="check-check" class="w-3.5 h-3.5 ${isRead ? 'text-[#a3d8f4]' : 'text-white/50'}"></i>` : ''}
+                        </div>
                     </div>
                 </div>`;
-            }).join('');
+            }).join('') || '<div class="flex-1 flex items-center justify-center text-stone-400 text-sm font-medium">No messages here. Say hi!</div>';
+            
+            lucide.createIcons();
             box.scrollTop = box.scrollHeight;
         }
 
-        // Real-time Chat Sync
+        async function markAsRead(messageId, currentReaders) {
+            const updatedReaders = [...currentReaders, memberData.member_id];
+            await supabase.from('messages').update({ read_by: updatedReaders }).eq('id', messageId);
+        }
+
         setInterval(async () => {
             const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
             if (data && data.length !== messagesLength) {
@@ -183,113 +152,23 @@
             }
         }, 3000);
 
-        window.submitWork = async (e) => {
-            e.preventDefault();
-            const idField = document.getElementById('sub-id').value;
-            const title = document.getElementById('sub-title').value;
-            const courseId = document.getElementById('sub-course').value;
-            const fileInput = document.getElementById('sub-file');
-            const btn = document.getElementById('sub-btn');
-            const statusText = document.getElementById('upload-status');
-
-            let file_url = document.getElementById('sub-existing-url').value;
-            let file_name = document.getElementById('sub-existing-name').value;
-
-            if (!idField && fileInput.files.length === 0) {
-                showToast("Please attach a file before submitting.");
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = "Uploading... Please wait";
-            statusText.classList.remove('hidden');
-            statusText.innerText = "Upload in progress. Do not close tab.";
-
-            try {
-                if (fileInput.files.length > 0) {
-                    const file = fileInput.files[0];
-                    const filePath = `${memberData.member_id}_${Date.now()}_${file.name}`;
-                    
-                    const { error: uploadError } = await supabase.storage.from('submissions').upload(filePath, file);
-                    if (uploadError) throw uploadError;
-
-                    const { data: publicUrlData } = supabase.storage.from('submissions').getPublicUrl(filePath);
-                    file_url = publicUrlData.publicUrl;
-                    file_name = file.name;
-                }
-
-                const timestamp = Date.now();
-
-                if (idField) {
-                    await supabase.from('submissions').update({ title, file_url, file_name, course_id: courseId, updated_at: timestamp }).eq('id', idField);
-                    showToast("Submission Updated");
-                } else {
-                    await supabase.from('submissions').insert([{
-                        member_id: memberData.member_id,
-                        member_name: memberData.name,
-                        title: title,
-                        file_url: file_url,
-                        file_name: file_name,
-                        course_id: courseId,
-                        status: 'Pending',
-                        created_at: timestamp,
-                        updated_at: timestamp
-                    }]);
-                    showToast("Work Submitted");
-                }
-                
-                e.target.reset();
-                document.getElementById('sub-id').value = '';
-                document.getElementById('sub-existing-url').value = '';
-                document.getElementById('sub-existing-name').value = '';
-                document.getElementById('sub-btn').innerText = "Submit Work";
-                statusText.classList.add('hidden');
-                fetchAllData();
-            } catch (error) {
-                console.error(error);
-                showToast("Upload failed.");
-            } finally {
-                btn.disabled = false;
-            }
-        };
-
-        window.editWork = (id, title, url, name, courseId) => {
-            document.getElementById('sub-id').value = id;
-            document.getElementById('sub-title').value = title;
-            document.getElementById('sub-existing-url').value = url;
-            document.getElementById('sub-existing-name').value = name;
-            document.getElementById('sub-course').value = courseId;
-            document.getElementById('sub-btn').innerText = "Save Changes";
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            showToast("Editing details. Attach a new file ONLY if replacing.");
-        };
-
-        window.deleteWork = async (id) => {
-            if(confirm("Delete this submission?")) {
-                await supabase.from('submissions').delete().eq('id', id);
-                showToast("Deleted");
-                fetchAllData();
-            }
-        };
-
-        window.prepareResubmit = (oldTitle, courseId) => {
-            document.getElementById('sub-id').value = ''; 
-            document.getElementById('sub-title').value = oldTitle + " (Resubmission)";
-            document.getElementById('sub-existing-url').value = '';
-            document.getElementById('sub-existing-name').value = '';
-            document.getElementById('sub-course').value = courseId;
-            document.getElementById('sub-file').focus();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            showToast("Ready. Please attach your revised file.");
-        };
-
         window.sendMessage = async (e) => {
             e.preventDefault();
             const input = document.getElementById('chat-input');
             if(!input.value.trim()) return;
-            await supabase.from('messages').insert([{ sender: memberData.name, text: input.value, is_admin: false }]);
-            input.value = '';
-            fetchAllData();
+
+            document.getElementById('typing-indicator').classList.remove('hidden');
+            setTimeout(async () => {
+                await supabase.from('messages').insert([{ 
+                    sender: memberData.name, 
+                    text: input.value, 
+                    is_admin: false,
+                    course_id: activeChatCourse
+                }]);
+                input.value = '';
+                document.getElementById('typing-indicator').classList.add('hidden');
+                fetchAllData();
+            }, 400);
         };
 
         lucide.createIcons();
