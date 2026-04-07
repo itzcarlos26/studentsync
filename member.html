@@ -27,18 +27,23 @@
                 <div><h1 class="text-2xl font-black">Welcome, <span id="display-name" class="text-[#8B4513]"></span></h1><p class="text-stone-500 text-sm">Submit and track your deliverables.</p></div>
                 <button onclick="logout()" class="text-red-500 text-sm font-bold bg-red-50 px-4 py-2 rounded-lg border border-red-100 hover:bg-red-100">Log Out</button>
             </div>
+            
             <div class="bg-rose-50 p-6 rounded-2xl border border-rose-100">
                 <h2 class="font-bold flex items-center gap-2 text-rose-800 mb-4"><i data-lucide="megaphone" class="h-5 w-5"></i> Leader Notices</h2>
                 <div id="announcements-list" class="space-y-3"></div>
             </div>
+            
             <div class="bg-white p-6 rounded-2xl border shadow-sm flex-1">
                 <h2 class="font-bold flex items-center gap-2 mb-4"><i data-lucide="upload-cloud" class="h-5 w-5 text-[#556B2F]"></i> Submissions Disabled for Messenger Preview</h2>
                 <p class="text-stone-500 text-sm">Focus on testing the right-hand chat panel.</p>
             </div>
+
+            <footer class="mt-auto pt-4 pb-2 text-center text-xs font-bold text-stone-400">
+                &copy; 2026 Carlos Darrel. All rights reserved.
+            </footer>
         </div>
 
         <div class="w-full md:w-96 bg-[#EAECE4] border rounded-2xl shadow-sm flex flex-col h-[600px] md:h-full shrink-0 overflow-hidden relative">
-            
             <div class="bg-white p-4 border-b flex justify-between items-center z-10 shadow-sm">
                 <div class="flex items-center gap-2 w-full">
                     <div class="bg-[#F4F5F0] p-2 rounded-full"><i data-lucide="users" class="text-[#4B5320] w-5 h-5"></i></div>
@@ -105,7 +110,7 @@
 
         window.switchChatCourse = (courseId) => {
             activeChatCourse = courseId;
-            fetchAllData(); // Refresh to render the new room
+            fetchAllData(); 
         };
 
         async function renderChat(messages) {
@@ -118,7 +123,6 @@
                 const timeStr = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const isRead = m.read_by && m.read_by.length > 0;
 
-                // Read Receipt Logic: If it's a leader message and I haven't read it, mark it.
                 if (m.is_admin && (!m.read_by || !m.read_by.includes(memberData.member_id))) {
                     markAsRead(m.id, m.read_by || []);
                 }
