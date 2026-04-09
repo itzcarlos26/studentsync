@@ -114,21 +114,29 @@
             if(tab === 'chat') scrollToBottom();
         };
 
-        window.switchChatCourse = (courseId) => {
-            window.state.activeChatCourse = courseId;
-            renderChatMessages();
-        };
-
+        window.switchChatCourse = (courseId) => { window.state.activeChatCourse = courseId; renderChatMessages(); };
         window.deleteItem = async (col, id) => { if(confirm("Delete this item?")) { await supabase.from(col).delete().eq('id', id); showToast("Deleted."); fetchAllData(); } };
         window.toggleMyTask = async (id) => { const task = window.state.myTasks.find(t => t.id === id); await supabase.from('tasks').update({ completed: !task.completed, completed_at: !task.completed ? Date.now() : null }).eq('id', id); fetchAllData(); };
         window.addCourse = async (e) => { e.preventDefault(); await supabase.from('courses').insert([{ code: document.getElementById('c-code').value.toUpperCase(), name: document.getElementById('c-name').value, created_at: Date.now() }]); showToast("Course Added"); e.target.reset(); fetchAllData(); };
-        window.addMyTask = async (e) => { e.preventDefault(); await supabase.from('tasks').insert([{ title: document.getElementById('t-title').value, course_id: document.getElementById('t-course').value, due_date: document.getElementById('t-date').value, completed: false, created_at: Date.now() }]); showToast("Personal Task Added"); e.target.reset(); fetchAllData(); };
         window.addExam = async (e) => { e.preventDefault(); await supabase.from('exams').insert([{ course_id: document.getElementById('e-course').value, type: document.getElementById('e-type').value, date: document.getElementById('e-date').value, created_at: Date.now() }]); showToast("Exam Scheduled"); e.target.reset(); fetchAllData(); };
         
+        // My Tasks Editing Logic
+        window.editMyTask = (id, title, courseId, dueDate) => {
+            document.getElementById('t-id').value = id; document.getElementById('t-title').value = title; document.getElementById('t-course').value = courseId; document.getElementById('t-date').value = dueDate;
+            document.getElementById('t-form-title').innerText = "Edit Task Details"; document.getElementById('t-submit-btn').innerText = "Save Changes"; document.getElementById('t-cancel-btn').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+        window.cancelEditTask = () => { const form = document.getElementById('t-form'); if(form) form.reset(); document.getElementById('t-id').value = ''; document.getElementById('t-form-title').innerText = "Add New Task"; document.getElementById('t-submit-btn').innerText = "Add Task"; document.getElementById('t-cancel-btn').classList.add('hidden'); };
+        window.addMyTask = async (e) => {
+            e.preventDefault(); const id = document.getElementById('t-id').value; const title = document.getElementById('t-title').value; const course_id = document.getElementById('t-course').value; const due_date = document.getElementById('t-date').value;
+            if (id) { await supabase.from('tasks').update({ title, course_id, due_date }).eq('id', id); showToast("Task Updated"); } 
+            else { await supabase.from('tasks').insert([{ title, course_id, due_date, completed: false, created_at: Date.now() }]); showToast("Personal Task Added"); }
+            window.cancelEditTask(); fetchAllData();
+        };
+
+        // Team Management Editing Logic
         window.editTeamMember = (docId, memberId, name, coursesStr) => {
             document.getElementById('tm-doc-id').value = docId; document.getElementById('tm-id').value = memberId; document.getElementById('tm-name').value = name;
-            const courseArr = coursesStr ? coursesStr.split(',') : [];
-            document.querySelectorAll('input[name="tm-courses"]').forEach(cb => cb.checked = courseArr.includes(cb.value));
+            const courseArr = coursesStr ? coursesStr.split(',') : []; document.querySelectorAll('input[name="tm-courses"]').forEach(cb => cb.checked = courseArr.includes(cb.value));
             document.getElementById('tm-form-title').innerText = "Edit Member Details"; document.getElementById('tm-submit-btn').innerText = "Save Changes"; document.getElementById('tm-cancel-btn').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
         };
         window.cancelEditTm = () => { const form = document.getElementById('tm-form'); if(form) form.reset(); document.getElementById('tm-doc-id').value = ''; document.getElementById('tm-form-title').innerText = "Register New Member"; document.getElementById('tm-submit-btn').innerText = "Register Member"; document.getElementById('tm-cancel-btn').classList.add('hidden'); };
@@ -141,48 +149,22 @@
         window.addAnnouncement = async (e) => { e.preventDefault(); await supabase.from('announcements').insert([{ content: document.getElementById('ann-content').value }]); showToast("Announcement Posted!"); e.target.reset(); fetchAllData(); };
 
         window.sendMessage = async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('chat-input');
-            if(!input.value.trim()) return;
-            
+            e.preventDefault(); const input = document.getElementById('chat-input'); if(!input.value.trim()) return;
             document.getElementById('typing-indicator').classList.remove('hidden');
-            setTimeout(async () => {
-                await supabase.from('messages').insert([{ sender: 'Leader', text: input.value, is_admin: true, course_id: window.state.activeChatCourse }]);
-                input.value = '';
-                document.getElementById('typing-indicator').classList.add('hidden');
-                fetchAllData();
-            }, 400);
+            setTimeout(async () => { await supabase.from('messages').insert([{ sender: 'Leader', text: input.value, is_admin: true, course_id: window.state.activeChatCourse }]); input.value = ''; document.getElementById('typing-indicator').classList.add('hidden'); fetchAllData(); }, 400);
         };
-
         window.clearChat = async () => { if(confirm("Clear messages in this specific course?")) { await supabase.from('messages').delete().eq('course_id', window.state.activeChatCourse); showToast("Chat Cleared"); fetchAllData(); } };
 
         function scrollToBottom() { const chatBox = document.getElementById('chat-box'); if(chatBox) chatBox.scrollTop = chatBox.scrollHeight; }
 
         function renderChatMessages() {
-            const box = document.getElementById('chat-box');
-            if(!box) return;
-            
+            const box = document.getElementById('chat-box'); if(!box) return;
             const filteredMessages = window.state.messages.filter(m => m.course_id === window.state.activeChatCourse);
-            
             box.innerHTML = filteredMessages.map(m => {
-                const timeStr = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const isReadByTeam = m.read_by && m.read_by.length > 0;
-                
-                return `
-                <div class="flex flex-col ${m.is_admin ? 'items-end' : 'items-start'} mb-4 group relative">
-                    ${!m.is_admin ? `<span class="text-[10px] text-stone-500 font-bold mb-1 ml-1">${m.sender}</span>` : ''}
-                    <div class="relative max-w-[75%] px-4 py-2.5 text-sm rounded-2xl shadow-sm ${m.is_admin ? 'bg-[#556B2F] text-white rounded-br-sm' : 'bg-white border border-[#EAECE4] text-stone-800 rounded-bl-sm'}">
-                        <p class="leading-relaxed pr-2">${m.text}</p>
-                        <div class="flex items-center justify-end gap-1.5 mt-1 -mb-1">
-                            <span class="text-[9px] font-medium ${m.is_admin ? 'text-white/70' : 'text-stone-400'}">${timeStr}</span>
-                            ${m.is_admin ? `<i data-lucide="check-check" class="w-3.5 h-3.5 ${isReadByTeam ? 'text-[#a3d8f4]' : 'text-white/50'}"></i>` : ''}
-                        </div>
-                    </div>
-                    <button onclick="deleteItem('messages', '${m.id}')" class="absolute top-2 ${m.is_admin ? '-left-8' : '-right-8'} opacity-0 group-hover:opacity-100 p-1 text-red-500 transition-opacity bg-white rounded-full shadow-sm border border-red-100"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </div>`;
+                const timeStr = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); const isReadByTeam = m.read_by && m.read_by.length > 0;
+                return `<div class="flex flex-col ${m.is_admin ? 'items-end' : 'items-start'} mb-4 group relative">${!m.is_admin ? `<span class="text-[10px] text-stone-500 font-bold mb-1 ml-1">${m.sender}</span>` : ''}<div class="relative max-w-[75%] px-4 py-2.5 text-sm rounded-2xl shadow-sm ${m.is_admin ? 'bg-[#556B2F] text-white rounded-br-sm' : 'bg-white border border-[#EAECE4] text-stone-800 rounded-bl-sm'}"><p class="leading-relaxed pr-2">${m.text}</p><div class="flex items-center justify-end gap-1.5 mt-1 -mb-1"><span class="text-[9px] font-medium ${m.is_admin ? 'text-white/70' : 'text-stone-400'}">${timeStr}</span>${m.is_admin ? `<i data-lucide="check-check" class="w-3.5 h-3.5 ${isReadByTeam ? 'text-[#a3d8f4]' : 'text-white/50'}"></i>` : ''}</div></div><button onclick="deleteItem('messages', '${m.id}')" class="absolute top-2 ${m.is_admin ? '-left-8' : '-right-8'} opacity-0 group-hover:opacity-100 p-1 text-red-500 transition-opacity bg-white rounded-full shadow-sm border border-red-100"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`;
             }).join('') || '<div class="flex-1 flex items-center justify-center text-stone-400 text-sm font-medium">No messages in this course yet.</div>';
-            lucide.createIcons();
-            scrollToBottom();
+            lucide.createIcons(); scrollToBottom();
         }
 
         const formatTime = (totalSeconds) => { const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0'); const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0'); const s = (totalSeconds % 60).toString().padStart(2, '0'); return window.timerState.mode === 'stopwatch' ? `${h}:${m}:${s}` : `${m}:${s}`; };
@@ -202,47 +184,72 @@
 
             const main = document.getElementById('main-view');
             
-            if (window.state.activeTab === 'chat') {
-                const courseOptions = window.state.courses.map(c => `<option value="${c.id}" ${window.state.activeChatCourse === c.id ? 'selected' : ''}>${c.code} Chat</option>`).join('');
+            if (window.state.activeTab === 'dashboard') {
+                const pendingTasks = window.state.myTasks.filter(t => !t.completed);
+                const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending').length;
+                const examsList = window.state.exams.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
                 
-                main.innerHTML = `
-                    <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-3xl font-bold flex items-center gap-2"><i data-lucide="message-square" class="text-[#556B2F]"></i> Workspace Messenger</h1>
+                const getUrgencyStyles = (dateString) => {
+                    const days = (new Date(dateString).setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+                    if (days < 7) return 'bg-red-50 border-red-200 border-l-4 border-l-red-500 text-red-900';
+                    if (days <= 21) return 'bg-orange-50 border-orange-200 border-l-4 border-l-orange-500 text-orange-900';
+                    return 'bg-stone-50 border-stone-200 border-l-4 border-l-stone-400 text-stone-800';
+                };
+
+                const msgCounts = window.state.messages.reduce((acc, m) => { acc[m.course_id] = (acc[m.course_id]||0)+1; return acc; }, {});
+                const msgHtml = Object.entries(msgCounts).map(([cId, count]) => `<div class="flex justify-between items-center text-[11px] font-bold border-b border-stone-100 last:border-0 py-1.5"><span class="truncate pr-2">${getCourseCode(cId)}</span><span class="text-[#4B5320] bg-[#EAECE4] px-1.5 py-0.5 rounded">${count}</span></div>`).join('') || '<div class="text-xs text-stone-400 mt-2">No messages</div>';
+
+                const tListHtml = pendingTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 5).map(t => `
+                    <div class="flex items-start gap-3 p-3 rounded-xl shadow-sm hover:shadow-md transition-all mb-3 ${getUrgencyStyles(t.due_date)}">
+                        <button onclick="toggleMyTask('${t.id}')" class="mt-0.5 h-5 w-5 rounded-full border-2 border-current opacity-40 flex-shrink-0 flex items-center justify-center hover:opacity-100 hover:bg-current text-transparent hover:text-white transition-colors"><i data-lucide="check-circle-2" class="h-3 w-3"></i></button>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start gap-2"><span class="font-bold text-current truncate">${t.title}</span><span class="text-[10px] font-black px-1.5 py-0.5 bg-white/60 rounded shadow-sm border border-black/5 whitespace-nowrap text-stone-700">${new Date(t.due_date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span></div>
+                            <span class="text-xs text-current opacity-80 mt-1 font-medium">${getCourseCode(t.course_id)}</span>
+                        </div>
                     </div>
-                    <div class="flex flex-col h-[600px] bg-[#EAECE4] rounded-2xl border shadow-sm overflow-hidden relative">
-                        
-                        <div class="bg-white p-4 border-b flex justify-between items-center z-10 shadow-sm">
-                            <div class="flex items-center gap-3">
-                                <div class="bg-[#F4F5F0] p-2 rounded-full"><i data-lucide="hash" class="text-[#4B5320] w-5 h-5"></i></div>
-                                <select onchange="switchChatCourse(this.value)" class="text-lg font-bold text-stone-800 bg-transparent outline-none cursor-pointer hover:bg-stone-50 rounded-lg p-1 transition-colors">
-                                    <option value="Global" ${window.state.activeChatCourse === 'Global' ? 'selected' : ''}>Global Broadcast</option>
-                                    ${courseOptions}
-                                </select>
-                            </div>
-                            <button onclick="clearChat()" class="text-stone-400 hover:text-red-600 transition-colors p-2 rounded-full hover:bg-red-50" title="Clear this chat"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                `).join('') || `<p class="text-sm text-stone-500 italic">No pending tasks.</p>`;
+
+                const eListHtml = examsList.slice(0, 5).map(e => `
+                    <div class="flex flex-col p-3 rounded-xl shadow-sm bg-white border border-[#EAECE4] mb-3 border-l-4 border-l-rose-500">
+                        <div class="flex justify-between items-start"><span class="font-black text-stone-800">${getCourseCode(e.course_id)}</span><span class="text-[10px] font-black px-1.5 py-0.5 bg-rose-50 rounded shadow-sm border border-rose-100 whitespace-nowrap text-rose-700">${new Date(e.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span></div>
+                        <span class="text-xs text-stone-600 mt-1 font-medium uppercase tracking-wider">${e.type}</span>
+                    </div>
+                `).join('') || `<p class="text-sm text-stone-500 italic">No upcoming exams.</p>`;
+
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold text-stone-800 mb-6">Overview</h1>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">My Tasks</p><p class="text-2xl font-black">${pendingTasks.length}</p></div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-blue-200"><p class="text-xs text-blue-600 font-bold uppercase">New Subs</p><p class="text-2xl font-black text-blue-700">${reviewNeeded}</p></div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Team Size</p><p class="text-2xl font-black">${window.state.teamMembers.length}</p></div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Exams</p><p class="text-2xl font-black">${window.state.exams.length}</p></div>
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border col-span-2 md:col-span-1 flex flex-col max-h-[88px] overflow-hidden"><p class="text-[10px] text-stone-500 font-bold uppercase mb-1">Messages</p><div class="overflow-y-auto no-scrollbar flex-1 pr-1">${msgHtml}</div></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#EAECE4] flex flex-col">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-stone-800 border-b border-[#F4F5F0] pb-2"><i data-lucide="check-circle-2" class="h-5 w-5 text-[#556B2F]"></i>My Tasks Timeline</h2>
+                            <div class="flex gap-2 mb-4 text-[9px] font-bold uppercase tracking-wider"><span class="text-red-700 bg-red-100 px-2 py-1 rounded">Red: < 7 Days</span><span class="text-orange-700 bg-orange-100 px-2 py-1 rounded">Orange: 7-21 Days</span><span class="text-stone-600 bg-stone-200 px-2 py-1 rounded">Grey: > 21 Days</span></div>
+                            <div class="flex-1">${tListHtml}</div>
                         </div>
-
-                        <div id="chat-box" class="flex-1 p-6 overflow-y-auto flex flex-col scroll-smooth"></div>
-
-                        <div id="typing-indicator" class="hidden absolute bottom-24 left-6 bg-white px-4 py-2 rounded-2xl shadow-sm border border-[#EAECE4] text-xs font-bold text-stone-500 flex items-center gap-1 w-fit">
-                            Typing <span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span><span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span><span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#EAECE4] flex flex-col">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-stone-800 border-b border-[#F4F5F0] pb-2"><i data-lucide="calendar" class="h-5 w-5 text-rose-600"></i>Upcoming Exams</h2>
+                            <div class="flex-1 mt-1">${eListHtml}</div>
                         </div>
-
-                        <form onsubmit="sendMessage(event)" class="bg-white p-4 border-t flex gap-3">
-                            <button type="button" class="p-3 text-stone-400 hover:text-[#556B2F] transition-colors"><i data-lucide="paperclip"></i></button>
-                            <input type="text" id="chat-input" placeholder="Type your message..." class="flex-1 p-3 bg-[#F4F5F0] border border-[#EAECE4] rounded-xl outline-none focus:border-[#556B2F] focus:ring-1 focus:ring-[#556B2F] transition-all" autocomplete="off">
-                            <button type="submit" class="bg-[#4B5320] text-white p-3 rounded-xl shadow-md hover:bg-[#556B2F] transition-transform active:scale-95"><i data-lucide="send" class="w-5 h-5 ml-1"></i></button>
-                        </form>
                     </div>
                 `;
+            } else if (window.state.activeTab === 'chat') {
+                const courseOptions = window.state.courses.map(c => `<option value="${c.id}" ${window.state.activeChatCourse === c.id ? 'selected' : ''}>${c.code} Chat</option>`).join('');
+                main.innerHTML = `<div class="flex justify-between items-center mb-6"><h1 class="text-3xl font-bold flex items-center gap-2"><i data-lucide="message-square" class="text-[#556B2F]"></i> Workspace Messenger</h1></div><div class="flex flex-col h-[600px] bg-[#EAECE4] rounded-2xl border shadow-sm overflow-hidden relative"><div class="bg-white p-4 border-b flex justify-between items-center z-10 shadow-sm"><div class="flex items-center gap-3"><div class="bg-[#F4F5F0] p-2 rounded-full"><i data-lucide="hash" class="text-[#4B5320] w-5 h-5"></i></div><select onchange="switchChatCourse(this.value)" class="text-lg font-bold text-stone-800 bg-transparent outline-none cursor-pointer hover:bg-stone-50 rounded-lg p-1 transition-colors"><option value="Global" ${window.state.activeChatCourse === 'Global' ? 'selected' : ''}>Global Broadcast</option>${courseOptions}</select></div><button onclick="clearChat()" class="text-stone-400 hover:text-red-600 transition-colors p-2 rounded-full hover:bg-red-50" title="Clear this chat"><i data-lucide="trash-2" class="w-5 h-5"></i></button></div><div id="chat-box" class="flex-1 p-6 overflow-y-auto flex flex-col scroll-smooth"></div><div id="typing-indicator" class="hidden absolute bottom-24 left-6 bg-white px-4 py-2 rounded-2xl shadow-sm border border-[#EAECE4] text-xs font-bold text-stone-500 flex items-center gap-1 w-fit">Typing <span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span><span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span><span class="typing-dot w-1 h-1 bg-stone-400 rounded-full mx-[1px]"></span></div><form onsubmit="sendMessage(event)" class="bg-white p-4 border-t flex gap-3"><button type="button" class="p-3 text-stone-400 hover:text-[#556B2F] transition-colors"><i data-lucide="paperclip"></i></button><input type="text" id="chat-input" placeholder="Type your message..." class="flex-1 p-3 bg-[#F4F5F0] border border-[#EAECE4] rounded-xl outline-none focus:border-[#556B2F] focus:ring-1 focus:ring-[#556B2F] transition-all" autocomplete="off"><button type="submit" class="bg-[#4B5320] text-white p-3 rounded-xl shadow-md hover:bg-[#556B2F] transition-transform active:scale-95"><i data-lucide="send" class="w-5 h-5 ml-1"></i></button></form></div>`;
                 renderChatMessages();
-            } else if (window.state.activeTab === 'dashboard') {
-                const pendingTasks = window.state.myTasks.filter(t => !t.completed).length; const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending').length;
-                main.innerHTML = `<h1 class="text-3xl font-bold text-stone-800 mb-6">Overview</h1><div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">My Tasks</p><p class="text-2xl font-black">${pendingTasks}</p></div><div class="bg-white p-5 rounded-2xl shadow-sm border border-blue-200"><p class="text-xs text-blue-600 font-bold uppercase">New Submissions</p><p class="text-2xl font-black text-blue-700">${reviewNeeded}</p></div><div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Team Members</p><p class="text-2xl font-black">${window.state.teamMembers.length}</p></div><div class="bg-white p-5 rounded-2xl shadow-sm border"><p class="text-xs text-stone-500 font-bold uppercase">Exams</p><p class="text-2xl font-black">${window.state.exams.length}</p></div></div>`;
             } else if (window.state.activeTab === 'teamMgmt') {
                 const checkboxes = window.state.courses.map(c => `<label class="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer hover:bg-stone-100"><input type="checkbox" name="tm-courses" value="${c.id}" class="w-4 h-4 text-[#556B2F]"><span class="text-sm font-bold text-stone-700">${c.code}</span></label>`).join('');
                 const list = window.state.teamMembers.map(m => `<div class="p-4 bg-white border rounded-xl flex justify-between items-center mb-3"><div><p class="font-bold text-lg">${m.name} <span class="text-sm font-normal text-stone-500 ml-2">ID: ${m.member_id}</span></p><div class="flex gap-2 mt-2">${(m.courses || []).map(cid => `<span class="px-2 py-1 bg-[#EAECE4] text-xs rounded font-bold text-stone-700">${getCourseCode(cid)}</span>`).join('')}</div></div><div class="flex gap-2"><button onclick="editTeamMember('${m.id}', '${m.member_id}', '${m.name.replace(/'/g, "\\'")}', '${(m.courses || []).join(',')}')" class="text-blue-500 bg-blue-50 p-3 rounded-lg hover:bg-blue-100"><i data-lucide="edit"></i></button><button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No team members registered.</p>';
                 main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Team Management</h1><form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2><input type="hidden" id="tm-doc-id" value=""><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-stone-50" required><input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-stone-50" required></div><p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes}</div><button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button><button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
+            } else if (window.state.activeTab === 'myTasks') {
+                const options = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
+                const list = window.state.myTasks.filter(t=>!t.completed).map(t => `<div class="flex justify-between p-4 bg-white border rounded-xl mb-3 items-center"><div class="flex items-center gap-4"><button onclick="toggleMyTask('${t.id}')" class="h-6 w-6 rounded-full border-2 border-[#D5D8C5] hover:bg-[#556B2F] hover:border-[#556B2F] transition-colors"></button><div><p class="font-bold text-stone-800">${t.title}</p><p class="text-xs text-stone-500">${getCourseCode(t.course_id)} | Due: ${t.due_date}</p></div></div><div class="flex gap-2"><button onclick="editMyTask('${t.id}', '${t.title.replace(/'/g, "\\'")}', '${t.course_id}', '${t.due_date}')" class="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100"><i data-lucide="edit" class="w-4 h-4"></i></button><button onclick="deleteItem('tasks', '${t.id}')" class="text-red-500 bg-red-50 p-2 rounded-lg hover:bg-red-100"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No personal tasks yet.</p>';
+                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Personal Tasks</h1><form onsubmit="addMyTask(event)" id="t-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="check-square" class="text-[#556B2F]"></i> <span id="t-form-title">Add New Task</span></h2><input type="hidden" id="t-id" value=""><div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><input type="text" id="t-title" placeholder="Task Name" class="col-span-1 md:col-span-2 p-3 border rounded-xl bg-stone-50" required><select id="t-course" class="p-3 border rounded-xl bg-stone-50" required><option value="" disabled selected>Course</option>${options}</select><input type="date" id="t-date" class="p-3 border rounded-xl bg-stone-50" required></div><button type="submit" id="t-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Add Task</button><button type="button" id="t-cancel-btn" onclick="cancelEditTask()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
             } else if (window.state.activeTab === 'submissions') {
                 const getStatusColor = (status) => { if(status === 'Pending') return 'bg-blue-50 border-blue-200 text-blue-800'; if(status === 'Reviewing') return 'bg-orange-50 border-orange-200 text-orange-800'; if(status === 'Approved') return 'bg-green-50 border-green-200 text-green-800'; if(status === 'Rejected') return 'bg-red-50 border-red-200 text-red-800'; };
                 const list = window.state.submissions.map(s => {
@@ -252,10 +259,6 @@
             } else if (window.state.activeTab === 'courses') {
                 const list = window.state.courses.map(c => `<div class="flex justify-between items-center p-4 border-b last:border-0 bg-white"><div><span class="font-bold mr-3">${c.code}</span><span class="text-stone-600">${c.name}</span></div><button onclick="deleteItem('courses', '${c.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
                 main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Courses</h1><form onsubmit="addCourse(event)" class="bg-white p-5 rounded-2xl border mb-6 flex gap-3"><input type="text" id="c-code" placeholder="Code" class="w-32 p-3 border rounded-xl" required><input type="text" id="c-name" placeholder="Course Name" class="flex-1 p-3 border rounded-xl" required><button type="submit" class="bg-[#4B5320] text-white px-6 rounded-xl font-bold">Add</button></form><div class="border rounded-2xl overflow-hidden">${list}</div>`;
-            } else if (window.state.activeTab === 'myTasks') {
-                const options = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
-                const list = window.state.myTasks.filter(t=>!t.completed).map(t => `<div class="flex justify-between p-4 bg-white border rounded-xl mb-3 items-center"><div class="flex items-center gap-4"><button onclick="toggleMyTask('${t.id}')" class="h-6 w-6 rounded-full border-2 border-[#D5D8C5]"></button><div><p class="font-bold">${t.title}</p><p class="text-xs text-stone-500">${getCourseCode(t.course_id)} | Due: ${t.due_date}</p></div></div><button onclick="deleteItem('tasks', '${t.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Personal Tasks</h1><form onsubmit="addMyTask(event)" class="bg-white p-5 rounded-2xl border mb-6 grid grid-cols-1 md:grid-cols-4 gap-3"><input type="text" id="t-title" placeholder="Task Name" class="col-span-2 p-3 border rounded-xl" required><select id="t-course" class="p-3 border rounded-xl" required><option value="" disabled selected>Course</option>${options}</select><input type="date" id="t-date" class="p-3 border rounded-xl" required><button type="submit" class="bg-[#4B5320] text-white p-3 rounded-xl font-bold col-span-1 md:col-span-4">Add Task</button></form><div>${list}</div>`;
             } else if (window.state.activeTab === 'announcements') {
                 const list = window.state.announcements.map(a => `<div class="p-4 bg-white border rounded-xl mb-3 flex justify-between"><p>${a.content}</p><button onclick="deleteItem('announcements', '${a.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
                 main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Broadcast Announcement</h1><form onsubmit="addAnnouncement(event)" class="mb-8"><textarea id="ann-content" placeholder="Type announcement..." class="w-full p-4 border rounded-xl bg-white min-h-[100px] mb-3" required></textarea><button type="submit" class="bg-[#8B4513] text-white px-6 py-3 rounded-lg font-bold">Post Notice</button></form><div>${list}</div>`;
