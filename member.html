@@ -21,6 +21,7 @@
 <body class="bg-[#F4F5F0] text-stone-900 font-sans h-[100dvh] overflow-hidden flex flex-col md:flex-row">
 
     <div id="app-layout" class="hidden h-full w-full flex-col md:flex-row relative">
+        
         <div class="md:hidden bg-[#4B5320] text-white p-4 font-bold text-xl flex items-center justify-between shadow-md z-20 shrink-0">
             <span>StudentSync</span>
             <button onclick="logout()" class="text-white opacity-90 hover:opacity-100 flex items-center gap-1 text-sm font-bold bg-[#3A4018] px-3 py-1.5 rounded-lg transition-colors">
@@ -60,7 +61,6 @@
 
         window.showToast = (msg) => { const toast = document.getElementById('toast-container'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); };
 
-        // --- NEW: Presence Heartbeat ---
         async function sendHeartbeat() {
             if (memberData && memberData.member_id) {
                 await supabase.from('team_members').update({ last_active: Date.now() }).eq('member_id', memberData.member_id);
@@ -72,11 +72,19 @@
             document.getElementById('app-layout').classList.remove('hidden'); 
             document.getElementById('app-layout').classList.add('flex'); 
             fetchAllData(); 
-            sendHeartbeat(); // Ping immediately on load
-            setInterval(sendHeartbeat, 60000); // Ping every 60 seconds
+            sendHeartbeat(); 
+            setInterval(sendHeartbeat, 60000); 
         }
         
-        window.logout = () => { localStorage.removeItem('syncMemberData'); window.location.href = 'index.html'; };
+        // --- NEW: Asynchronous Logout to explicitly clear Online Status ---
+        window.logout = async () => { 
+            if (memberData && memberData.member_id) {
+                // Instantly push the active time back 5 minutes (300000 ms) so the leader's dashboard drops the "Online Now" status
+                await supabase.from('team_members').update({ last_active: Date.now() - 300000 }).eq('member_id', memberData.member_id);
+            }
+            localStorage.removeItem('syncMemberData'); 
+            window.location.href = 'index.html'; 
+        };
 
         const getCourseCode = (id) => window.state.allCourses.find(c => c.id === id)?.code || 'Unknown Course';
 
@@ -202,7 +210,9 @@
                 const isMe = m.sender === memberData.name;
                 const timeStr = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const isRead = m.read_by && m.read_by.length > 0;
+
                 if (m.is_admin && (!m.read_by || !m.read_by.includes(memberData.member_id))) { markAsRead(m.id, m.read_by || []); }
+
                 return `
                 <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-4">
                     ${!isMe ? `<span class="text-[10px] text-stone-500 font-bold mb-1 ml-1">${m.sender}</span>` : ''}
