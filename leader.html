@@ -83,7 +83,6 @@
             renderApp(); if(window.state.activeTab === 'chat') scrollToBottom();
         }
 
-        // --- NEW: Interval fetches Team Members to update Presence Status ---
         setInterval(async () => {
             if (window.state.activeTab === 'chat') {
                 const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
@@ -92,7 +91,7 @@
                 const { data } = await supabase.from('team_members').select('*').order('created_at', { ascending: false });
                 if (data) { window.state.teamMembers = data; renderApp(); }
             }
-        }, 5000); // 5 sec update for Dashboard Activity
+        }, 5000);
 
         window.switchTab = (tab) => { if(tab === 'logout') { window.logout(); return; } window.state.activeTab = tab; renderApp(); if(tab === 'chat') scrollToBottom(); };
         window.switchChatCourse = (courseId) => { window.state.activeChatCourse = courseId; renderChatMessages(); };
@@ -196,8 +195,14 @@
                     </div>
                 `).join('') || `<p class="text-sm text-stone-500 italic">No upcoming exams.</p>`;
 
-                // --- NEW: Team Activity Panel Logic ---
-                const teamStatusHtml = window.state.teamMembers.map(m => {
+                // --- NEW: Real-time Sorting Logic Applied ---
+                const sortedTeamMembers = [...window.state.teamMembers].sort((a, b) => {
+                    const lastA = a.last_active || 0;
+                    const lastB = b.last_active || 0;
+                    return lastB - lastA; // Highest timestamp (newest) floats to the top
+                });
+
+                const teamStatusHtml = sortedTeamMembers.map(m => {
                     const lastActive = m.last_active;
                     let statusUi = ''; let timeText = 'Never seen';
                     
@@ -219,7 +224,7 @@
                     } else { statusUi = '<div class="w-2.5 h-2.5 rounded-full bg-stone-200"></div>'; }
 
                     return `
-                    <div class="flex items-center justify-between p-2.5 border-b border-stone-50 last:border-0">
+                    <div class="flex items-center justify-between p-2.5 border-b border-stone-50 last:border-0 hover:bg-stone-50 transition-colors">
                         <div class="flex items-center gap-3">${statusUi}<span class="font-bold text-sm text-stone-700">${m.name}</span></div>
                         <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider">${timeText}</span>
                     </div>`;
@@ -267,29 +272,4 @@
                 const getStatusColor = (status) => { if(status === 'Pending') return 'bg-blue-50 border-blue-200 text-blue-800'; if(status === 'Reviewing') return 'bg-orange-50 border-orange-200 text-orange-800'; if(status === 'Approved') return 'bg-green-50 border-green-200 text-green-800'; if(status === 'Rejected') return 'bg-red-50 border-red-200 text-red-800'; };
                 const list = window.state.submissions.map(s => {
                     const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
-                    return `<div class="p-4 border-2 rounded-xl mb-3 flex flex-col md:flex-row justify-between md:items-center gap-4 ${getStatusColor(s.status)}"><div><p class="font-bold text-lg">${s.title}</p><p class="text-sm">Submitted by: <span class="font-bold">${s.member_name}</span> | Course: ${getCourseCode(s.course_id)}</p><p class="text-xs text-stone-600 mt-1 font-medium"><i data-lucide="clock" class="inline w-3 h-3 mr-1"></i>${timeString}</p><a href="${s.file_url}" target="_blank" class="text-sm underline font-bold mt-2 inline-block"><i data-lucide="download-cloud" class="inline w-4 h-4 mr-1"></i>${s.file_name}</a></div><div class="flex gap-2 items-center"><select onchange="updateSubStatus('${s.id}', this.value)" class="p-2 border rounded-lg bg-white font-bold text-sm outline-none shadow-sm"><option value="Pending" ${s.status === 'Pending' ? 'selected' : ''}>🔵 Pending</option><option value="Reviewing" ${s.status === 'Reviewing' ? 'selected' : ''}>🟠 Reviewing</option><option value="Approved" ${s.status === 'Approved' ? 'selected' : ''}>🟢 Approved</option><option value="Rejected" ${s.status === 'Rejected' ? 'selected' : ''}>🔴 Rejected</option></select><button onclick="deleteItem('submissions', '${s.id}')" class="p-2 bg-white rounded-lg hover:bg-stone-100 text-stone-500 shadow-sm"><i data-lucide="trash"></i></button></div></div>`}).join('') || '<p class="text-stone-500 text-center py-8">No submissions yet.</p>';
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Submitted Tasks</h1><div class="bg-white p-4 rounded-xl border mb-6 flex gap-4 text-xs font-bold justify-center flex-wrap"><span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200">Pending</span><span class="px-3 py-1 bg-orange-50 text-orange-700 rounded-full border border-orange-200">Reviewing</span><span class="px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200">Approved</span><span class="px-3 py-1 bg-red-50 text-red-700 rounded-full border border-red-200">Rejected</span></div><div>${list}</div>`;
-            } else if (window.state.activeTab === 'courses') {
-                const list = window.state.courses.map(c => `<div class="flex justify-between items-center p-4 border-b last:border-0 bg-white"><div><span class="font-bold mr-3">${c.code}</span><span class="text-stone-600">${c.name}</span></div><button onclick="deleteItem('courses', '${c.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Courses</h1><form onsubmit="addCourse(event)" class="bg-white p-5 rounded-2xl border mb-6 flex gap-3"><input type="text" id="c-code" placeholder="Code" class="w-32 p-3 border rounded-xl" required><input type="text" id="c-name" placeholder="Course Name" class="flex-1 p-3 border rounded-xl" required><button type="submit" class="bg-[#4B5320] text-white px-6 rounded-xl font-bold">Add</button></form><div class="border rounded-2xl overflow-hidden">${list}</div>`;
-            } else if (window.state.activeTab === 'announcements') {
-                const list = window.state.announcements.map(a => `<div class="p-4 bg-white border rounded-xl mb-3 flex justify-between"><p>${a.content}</p><button onclick="deleteItem('announcements', '${a.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Broadcast Announcement</h1><form onsubmit="addAnnouncement(event)" class="mb-8"><textarea id="ann-content" placeholder="Type announcement..." class="w-full p-4 border rounded-xl bg-white min-h-[100px] mb-3" required></textarea><button type="submit" class="bg-[#8B4513] text-white px-6 py-3 rounded-lg font-bold">Post Notice</button></form><div>${list}</div>`;
-            } else if (window.state.activeTab === 'exams') {
-                const list = window.state.exams.map(e => `<div class="bg-white p-6 rounded-2xl border flex justify-between relative group"><div><span class="text-xs font-black text-rose-700 uppercase">${e.type}</span><h3 class="text-xl font-bold">${getCourseCode(e.course_id)}</h3><p class="text-sm mt-2"><i data-lucide="calendar" class="inline w-4 h-4"></i> ${e.date}</p></div><button onclick="deleteItem('exams', '${e.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Exams</h1><form onsubmit="addExam(event)" class="bg-white p-5 rounded-2xl border mb-6 flex gap-3"><select id="e-course" class="p-3 border rounded-xl"><option value="">Course</option>${window.state.courses.map(c=>`<option value="${c.id}">${c.code}</option>`)}</select><select id="e-type" class="p-3 border rounded-xl"><option>Quiz</option><option>Midterm</option><option>Final</option></select><input type="date" id="e-date" class="p-3 border rounded-xl" required><button type="submit" class="bg-rose-700 text-white px-6 rounded-xl font-bold">Add</button></form><div class="grid grid-cols-2 gap-4">${list}</div>`;
-            } else if (window.state.activeTab === 'timer') {
-                const ts = window.timerState;
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Timer</h1><div class="p-8 rounded-[2rem] border-4 flex flex-col items-center bg-white mb-6"><div id="timer-display-time" class="text-7xl font-black mb-10 text-stone-800">00:00:00</div><div class="flex gap-4"><button onclick="toggleTimer()" class="px-8 py-4 rounded-xl font-black text-white bg-[#4B5320] hover:bg-[#556B2F] uppercase">${ts.isActive ? 'Pause' : 'Start'}</button><button onclick="resetTimer()" class="px-6 py-4 rounded-xl font-bold bg-[#EAECE4]">Reset</button><button onclick="finishSession()" class="px-6 py-4 rounded-xl font-bold bg-[#8B4513] text-white">Save</button></div></div>`;
-            } else if (window.state.activeTab === 'history') {
-                const list = window.state.myTasks.filter(t=>t.completed).map(t => `<div class="p-4 border-b bg-white"><p class="line-through font-bold">${t.title}</p></div>`).join('');
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">History</h1><div class="border rounded-2xl overflow-hidden">${list}</div>`;
-            }
-            lucide.createIcons();
-            if(window.state.activeTab === 'timer' && document.getElementById('timer-display-time')) document.getElementById('timer-display-time').innerText = formatTime(window.timerState.timeSeconds);
-        }
-
-        lucide.createIcons();
-    </script>
-</body>
-</html>
+                    return `<div class="p-4 border-2 rounded-xl mb-3 flex flex-col md:flex-row justify-between md:items-center gap-4 ${getStatusColor(s.status)}"><div><p class="font-bold text-lg">${s.title}</p><p class="text-sm">Submitted by: <span class="font-bold">${s.member_name}</span> | Course: ${getCourseCode(s.course_id)}</p><p class="text-xs text-stone-600 mt-1 font-medium"><i data-lucide="clock" class="inline
