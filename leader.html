@@ -38,7 +38,6 @@
 
         <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 relative flex flex-col" id="app-content">
             <div class="max-w-6xl mx-auto w-full flex-1" id="main-view"></div>
-            
             <footer class="mt-8 text-center text-xs font-bold text-stone-400 w-full">
                 &copy; 2026 Carlos Darrel. All rights reserved.
             </footer>
@@ -54,28 +53,14 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlc3p5ZnBnbWdncGZ4andlcnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTYxODAsImV4cCI6MjA5MTAzMjE4MH0.WA22hdQiad4ZMlVgllEfKh6V9DdEdJRNTlb6J1PcoGM';
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        window.state = {
-            activeTab: 'dashboard', activeChatCourse: 'Global', courses: [], myTasks: [], exams: [], studySessions: [], teamMembers: [], submissions: [], announcements: [], messages: []
-        };
-
+        window.state = { activeTab: 'dashboard', activeChatCourse: 'Global', courses: [], myTasks: [], exams: [], studySessions: [], teamMembers: [], submissions: [], announcements: [], messages: [] };
         window.timerState = { mode: 'stopwatch', isActive: false, timeSeconds: 0, isBreak: false, inputMinutes: 60, courseId: '', intervalRef: null };
 
-        window.showToast = (msg) => {
-            const toast = document.getElementById('toast-container');
-            toast.innerText = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        };
-
+        window.showToast = (msg) => { const toast = document.getElementById('toast-container'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); };
         const getCourseCode = (id) => window.state.courses.find(c => c.id === id)?.code || (id === 'Global' ? 'Global Broadcast' : 'Unknown');
 
-        if (localStorage.getItem('syncRole') !== 'leader') {
-            window.location.href = 'index.html'; 
-        } else {
-            document.getElementById('app-layout').classList.remove('hidden');
-            document.getElementById('app-layout').classList.add('flex');
-            fetchAllData();
-        }
+        if (localStorage.getItem('syncRole') !== 'leader') { window.location.href = 'index.html'; } 
+        else { document.getElementById('app-layout').classList.remove('hidden'); document.getElementById('app-layout').classList.add('flex'); fetchAllData(); }
 
         window.logout = () => { localStorage.removeItem('syncRole'); window.location.href = 'index.html'; };
 
@@ -95,32 +80,27 @@
             window.state.studySessions = s.data || []; window.state.teamMembers = tm.data || []; window.state.submissions = sub.data || [];
             window.state.announcements = a.data || []; window.state.messages = m.data || [];
             
-            renderApp();
-            if(window.state.activeTab === 'chat') scrollToBottom();
+            renderApp(); if(window.state.activeTab === 'chat') scrollToBottom();
         }
 
+        // --- NEW: Interval fetches Team Members to update Presence Status ---
         setInterval(async () => {
-            if (window.state.activeTab !== 'chat') return;
-            const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-            if (data && JSON.stringify(data) !== JSON.stringify(window.state.messages)) {
-                window.state.messages = data;
-                renderChatMessages();
+            if (window.state.activeTab === 'chat') {
+                const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+                if (data && JSON.stringify(data) !== JSON.stringify(window.state.messages)) { window.state.messages = data; renderChatMessages(); }
+            } else if (window.state.activeTab === 'dashboard') {
+                const { data } = await supabase.from('team_members').select('*').order('created_at', { ascending: false });
+                if (data) { window.state.teamMembers = data; renderApp(); }
             }
-        }, 3000);
+        }, 5000); // 5 sec update for Dashboard Activity
 
-        window.switchTab = (tab) => { 
-            if(tab === 'logout') { window.logout(); return; }
-            window.state.activeTab = tab; renderApp(); 
-            if(tab === 'chat') scrollToBottom();
-        };
-
+        window.switchTab = (tab) => { if(tab === 'logout') { window.logout(); return; } window.state.activeTab = tab; renderApp(); if(tab === 'chat') scrollToBottom(); };
         window.switchChatCourse = (courseId) => { window.state.activeChatCourse = courseId; renderChatMessages(); };
         window.deleteItem = async (col, id) => { if(confirm("Delete this item?")) { await supabase.from(col).delete().eq('id', id); showToast("Deleted."); fetchAllData(); } };
         window.toggleMyTask = async (id) => { const task = window.state.myTasks.find(t => t.id === id); await supabase.from('tasks').update({ completed: !task.completed, completed_at: !task.completed ? Date.now() : null }).eq('id', id); fetchAllData(); };
         window.addCourse = async (e) => { e.preventDefault(); await supabase.from('courses').insert([{ code: document.getElementById('c-code').value.toUpperCase(), name: document.getElementById('c-name').value, created_at: Date.now() }]); showToast("Course Added"); e.target.reset(); fetchAllData(); };
         window.addExam = async (e) => { e.preventDefault(); await supabase.from('exams').insert([{ course_id: document.getElementById('e-course').value, type: document.getElementById('e-type').value, date: document.getElementById('e-date').value, created_at: Date.now() }]); showToast("Exam Scheduled"); e.target.reset(); fetchAllData(); };
         
-        // My Tasks Editing Logic
         window.editMyTask = (id, title, courseId, dueDate) => {
             document.getElementById('t-id').value = id; document.getElementById('t-title').value = title; document.getElementById('t-course').value = courseId; document.getElementById('t-date').value = dueDate;
             document.getElementById('t-form-title').innerText = "Edit Task Details"; document.getElementById('t-submit-btn').innerText = "Save Changes"; document.getElementById('t-cancel-btn').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -133,7 +113,6 @@
             window.cancelEditTask(); fetchAllData();
         };
 
-        // Team Management Editing Logic
         window.editTeamMember = (docId, memberId, name, coursesStr) => {
             document.getElementById('tm-doc-id').value = docId; document.getElementById('tm-id').value = memberId; document.getElementById('tm-name').value = name;
             const courseArr = coursesStr ? coursesStr.split(',') : []; document.querySelectorAll('input[name="tm-courses"]').forEach(cb => cb.checked = courseArr.includes(cb.value));
@@ -188,6 +167,7 @@
                 const pendingTasks = window.state.myTasks.filter(t => !t.completed);
                 const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending').length;
                 const examsList = window.state.exams.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+                const now = Date.now();
                 
                 const getUrgencyStyles = (dateString) => {
                     const days = (new Date(dateString).setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
@@ -216,6 +196,35 @@
                     </div>
                 `).join('') || `<p class="text-sm text-stone-500 italic">No upcoming exams.</p>`;
 
+                // --- NEW: Team Activity Panel Logic ---
+                const teamStatusHtml = window.state.teamMembers.map(m => {
+                    const lastActive = m.last_active;
+                    let statusUi = ''; let timeText = 'Never seen';
+                    
+                    if (lastActive) {
+                        const diffMins = Math.floor((now - lastActive) / 60000);
+                        if (diffMins <= 3) {
+                            statusUi = '<div class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_5px_rgba(34,197,94,0.6)]"></div>';
+                            timeText = '<span class="text-green-600">Online now</span>';
+                        } else if (diffMins < 60) {
+                            statusUi = '<div class="w-2.5 h-2.5 rounded-full bg-stone-300"></div>';
+                            timeText = `${diffMins}m ago`;
+                        } else if (diffMins < 1440) {
+                            statusUi = '<div class="w-2.5 h-2.5 rounded-full bg-stone-300"></div>';
+                            timeText = `${Math.floor(diffMins/60)}h ago`;
+                        } else {
+                            statusUi = '<div class="w-2.5 h-2.5 rounded-full bg-stone-300"></div>';
+                            timeText = `${Math.floor(diffMins/1440)}d ago`;
+                        }
+                    } else { statusUi = '<div class="w-2.5 h-2.5 rounded-full bg-stone-200"></div>'; }
+
+                    return `
+                    <div class="flex items-center justify-between p-2.5 border-b border-stone-50 last:border-0">
+                        <div class="flex items-center gap-3">${statusUi}<span class="font-bold text-sm text-stone-700">${m.name}</span></div>
+                        <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider">${timeText}</span>
+                    </div>`;
+                }).join('') || `<p class="text-sm text-stone-500 italic p-2">No team members registered.</p>`;
+
                 main.innerHTML = `
                     <h1 class="text-3xl font-bold text-stone-800 mb-6">Overview</h1>
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -226,15 +235,19 @@
                         <div class="bg-white p-4 rounded-2xl shadow-sm border col-span-2 md:col-span-1 flex flex-col max-h-[88px] overflow-hidden"><p class="text-[10px] text-stone-500 font-bold uppercase mb-1">Messages</p><div class="overflow-y-auto no-scrollbar flex-1 pr-1">${msgHtml}</div></div>
                     </div>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#EAECE4] flex flex-col">
                             <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-stone-800 border-b border-[#F4F5F0] pb-2"><i data-lucide="check-circle-2" class="h-5 w-5 text-[#556B2F]"></i>My Tasks Timeline</h2>
-                            <div class="flex gap-2 mb-4 text-[9px] font-bold uppercase tracking-wider"><span class="text-red-700 bg-red-100 px-2 py-1 rounded">Red: < 7 Days</span><span class="text-orange-700 bg-orange-100 px-2 py-1 rounded">Orange: 7-21 Days</span><span class="text-stone-600 bg-stone-200 px-2 py-1 rounded">Grey: > 21 Days</span></div>
+                            <div class="flex gap-2 mb-4 text-[8px] font-bold uppercase tracking-wider"><span class="text-red-700 bg-red-100 px-1.5 py-1 rounded">< 7 Days</span><span class="text-orange-700 bg-orange-100 px-1.5 py-1 rounded">7-21 Days</span><span class="text-stone-600 bg-stone-200 px-1.5 py-1 rounded">> 21 Days</span></div>
                             <div class="flex-1">${tListHtml}</div>
                         </div>
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#EAECE4] flex flex-col">
                             <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-stone-800 border-b border-[#F4F5F0] pb-2"><i data-lucide="calendar" class="h-5 w-5 text-rose-600"></i>Upcoming Exams</h2>
                             <div class="flex-1 mt-1">${eListHtml}</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#EAECE4] flex flex-col h-[400px]">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-stone-800 border-b border-[#F4F5F0] pb-2"><i data-lucide="activity" class="h-5 w-5 text-blue-500"></i>Team Activity</h2>
+                            <div class="flex-1 overflow-y-auto no-scrollbar">${teamStatusHtml}</div>
                         </div>
                     </div>
                 `;
