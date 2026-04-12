@@ -123,7 +123,27 @@
             if (docId) { await supabase.from('team_members').update({ member_id: memberId, name: name, courses: courses }).eq('id', docId); showToast("Member Updated"); } else { await supabase.from('team_members').insert([{ member_id: memberId, name: name, courses: courses, created_at: Date.now() }]); showToast("Member Registered"); }
             window.cancelEditTm(); fetchAllData();
         };
-        window.updateSubStatus = async (id, status) => { await supabase.from('submissions').update({ status: status }).eq('id', id); showToast(`Status updated to ${status}`); fetchAllData(); };
+
+        // --- NEW: Handle Feedback on Rejection ---
+        window.updateSubStatus = async (id, status) => { 
+            let feedback = null;
+            if (status === 'Rejected') {
+                feedback = prompt("Please provide a reason for rejecting this submission:");
+                if (feedback === null) return; // User clicked Cancel
+            }
+
+            const updateData = { status: status };
+            if (status === 'Rejected') {
+                updateData.feedback = feedback;
+            } else {
+                updateData.feedback = null; // Clear feedback if changed to something else
+            }
+
+            await supabase.from('submissions').update(updateData).eq('id', id); 
+            showToast(`Status updated to ${status}`); 
+            fetchAllData(); 
+        };
+
         window.addAnnouncement = async (e) => { e.preventDefault(); await supabase.from('announcements').insert([{ content: document.getElementById('ann-content').value }]); showToast("Announcement Posted!"); e.target.reset(); fetchAllData(); };
 
         window.sendMessage = async (e) => {
@@ -195,11 +215,10 @@
                     </div>
                 `).join('') || `<p class="text-sm text-stone-500 italic">No upcoming exams.</p>`;
 
-                // --- NEW: Real-time Sorting Logic Applied ---
                 const sortedTeamMembers = [...window.state.teamMembers].sort((a, b) => {
                     const lastA = a.last_active || 0;
                     const lastB = b.last_active || 0;
-                    return lastB - lastA; // Highest timestamp (newest) floats to the top
+                    return lastB - lastA; 
                 });
 
                 const teamStatusHtml = sortedTeamMembers.map(m => {
