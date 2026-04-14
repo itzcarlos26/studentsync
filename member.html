@@ -61,7 +61,7 @@
 
         let memberData = JSON.parse(localStorage.getItem('syncMemberData'));
         
-        window.state = { activeTab: 'workspace', activeChatCourse: memberData?.courses ? memberData.courses[0] : 'Global', allCourses: [], announcements: [], submissionsHtml: [], messages: [] };
+        window.state = { activeTab: 'workspace', activeChatCourse: memberData?.courses ? memberData.courses[0] : 'Global', allCourses: [], announcements: [], submissionsHtml: [], leaderDocsHtml: [], messages: [] };
         let messagesLength = 0;
 
         window.showToast = (msg) => { const toast = document.getElementById('toast-container'); toast.innerText = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); };
@@ -92,16 +92,23 @@
         const getCourseCode = (id) => window.state.allCourses.find(c => c.id === id)?.code || 'Unknown Course';
 
         async function fetchAllData() {
+            // Updated: Fetch both member's own submissions AND leader's returned documents
             const [c, sub, a, m] = await Promise.all([
                 supabase.from('courses').select('*'),
-                supabase.from('submissions').select('*').eq('member_id', memberData.member_id).order('updated_at', { ascending: false }),
+                supabase.from('submissions').select('*').or(`member_id.eq.${memberData.member_id},member_id.eq.LEADER`).order('updated_at', { ascending: false }),
                 supabase.from('announcements').select('*').order('created_at', { ascending: false }),
                 supabase.from('messages').select('*').order('created_at', { ascending: true })
             ]);
             
             window.state.allCourses = c.data || []; window.state.announcements = a.data || []; window.state.messages = m.data || [];
 
-            window.state.submissionsHtml = (sub.data || []).map(s => {
+            // Filter out purely the student's submissions
+            const mySubs = (sub.data || []).filter(s => s.member_id === memberData.member_id);
+            
+            // Filter out purely the leader's returned documents that belong to courses this member takes
+            const leaderDocs = (sub.data || []).filter(s => s.member_id === 'LEADER' && (memberData.courses || []).includes(s.course_id));
+
+            window.state.submissionsHtml = mySubs.map(s => {
                 let statusUI = ''; let actionUI = '';
                 const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -131,6 +138,21 @@
                 </div>`;
             });
 
+            // --- NEW: Generate HTML for documents the leader returned ---
+            window.state.leaderDocsHtml = leaderDocs.map(s => {
+                const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
+                return `
+                <div class="p-4 bg-white border-2 border-[#EAECE4] rounded-xl mb-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 hover:border-[#D5D8C5] transition-colors shadow-sm">
+                    <div>
+                        <p class="font-bold text-stone-800 text-lg">${s.title}</p>
+                        <p class="text-xs text-stone-500 font-bold mt-1"><i data-lucide="clock" class="inline w-3 h-3 mr-1"></i>${timeString} | Course: ${getCourseCode(s.course_id)}</p>
+                    </div>
+                    <a href="${s.file_url}" target="_blank" class="text-sm font-bold bg-[#EAECE4] text-[#4B5320] hover:bg-[#D5D8C5] px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors w-full md:w-auto justify-center">
+                        <i data-lucide="download-cloud" class="w-4 h-4"></i> Download
+                    </a>
+                </div>`;
+            });
+
             renderApp();
             if(window.state.activeTab === 'chat') scrollToBottom();
         }
@@ -155,7 +177,9 @@
             if (window.state.activeTab === 'workspace') {
                 const aListHtml = window.state.announcements.map(d => `<div class="p-3 bg-white border border-rose-200 rounded-lg text-sm text-rose-900 shadow-sm">${d.content}</div>`).join('') || '<p class="text-sm text-rose-600/60 italic">No announcements at this time.</p>';
                 const courseOptions = '<option value="" disabled selected>Select assigned course</option>' + (memberData.courses || []).map(cId => `<option value="${cId}">${getCourseCode(cId)}</option>`).join('');
+                
                 const sListHtml = window.state.submissionsHtml.join('') || '<p class="text-sm text-stone-500 italic py-4 text-center">You haven\'t submitted any work yet.</p>';
+                const lDocsHtml = window.state.leaderDocsHtml.join('') || '<p class="text-sm text-stone-500 italic py-4 text-center">No checked documents returned yet.</p>';
 
                 main.innerHTML = `
                     <div class="flex flex-col gap-6">
@@ -163,7 +187,17 @@
                             <div><h1 class="text-2xl font-black text-stone-800">Welcome, <span class="text-[#8B4513]">${memberData.name}</span></h1><p class="text-stone-500 text-sm mt-1">Submit and track your deliverables below.</p></div>
                             <button onclick="logout()" class="hidden md:block text-red-600 font-bold bg-red-50 px-5 py-2.5 rounded-xl border border-red-200 hover:bg-red-100 transition-colors"><i data-lucide="log-out" class="w-4 h-4 inline mr-1"></i>Log Out</button>
                         </div>
-                        <div class="bg-rose-50 p-6 rounded-2xl border border-rose-100"><h2 class="font-bold flex items-center gap-2 text-rose-800 mb-4"><i data-lucide="megaphone" class="h-5 w-5"></i> Leader Notices</h2><div class="space-y-3">${aListHtml}</div></div>
+                        
+                        <div class="bg-rose-50 p-6 rounded-2xl border border-rose-100">
+                            <h2 class="font-bold flex items-center gap-2 text-rose-800 mb-4"><i data-lucide="megaphone" class="h-5 w-5"></i> Leader Notices</h2>
+                            <div class="space-y-3">${aListHtml}</div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-2xl border shadow-sm">
+                            <h2 class="text-lg font-bold flex items-center gap-2 mb-4 text-[#8B4513] border-b border-[#F4F5F0] pb-2"><i data-lucide="file-check-2" class="h-5 w-5"></i> Returned Checked Documents</h2>
+                            <div class="space-y-4">${lDocsHtml}</div>
+                        </div>
+                        
                         <div class="bg-white p-6 rounded-2xl border shadow-sm">
                             <h2 class="font-bold flex items-center gap-2 mb-4"><i data-lucide="upload-cloud" class="h-5 w-5 text-[#556B2F]"></i> Work Submission</h2>
                             <form id="submission-form" onsubmit="submitWork(event)" class="bg-[#F9FAF8] p-4 rounded-xl border border-[#D5D8C5] mb-8 grid gap-4 shadow-inner">
