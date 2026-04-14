@@ -141,6 +141,51 @@
             showToast(`Status updated to ${status}`); fetchAllData(); 
         };
 
+        // --- NEW: Handle Returning Checked Documents to Team ---
+        window.returnDocument = async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('ret-title').value;
+            const courseId = document.getElementById('ret-course').value;
+            const fileInput = document.getElementById('ret-file');
+            const btn = document.getElementById('ret-btn');
+
+            if (fileInput.files.length === 0) { showToast("Please attach a file."); return; }
+
+            btn.disabled = true; btn.innerText = "Uploading to Database...";
+
+            try {
+                const file = fileInput.files[0];
+                const filePath = `LEADER_${Date.now()}_${file.name}`;
+                const { error } = await supabase.storage.from('submissions').upload(filePath, file);
+                if (error) throw error;
+                
+                const { data } = supabase.storage.from('submissions').getPublicUrl(filePath);
+                
+                // Save under special LEADER ID tag
+                await supabase.from('submissions').insert([{
+                    member_id: 'LEADER',
+                    member_name: 'Leader',
+                    title: title,
+                    file_url: data.publicUrl,
+                    file_name: file.name,
+                    course_id: courseId,
+                    status: 'Returned',
+                    created_at: Date.now(),
+                    updated_at: Date.now()
+                }]);
+                showToast("Document successfully shared with team!");
+                e.target.reset();
+                fetchAllData();
+            } catch (err) {
+                console.error(err);
+                showToast("Upload failed.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="send" class="inline w-4 h-4 mr-1"></i> Send to Team`;
+                lucide.createIcons();
+            }
+        };
+
         window.addAnnouncement = async (e) => { e.preventDefault(); await supabase.from('announcements').insert([{ content: document.getElementById('ann-content').value }]); showToast("Announcement Posted!"); e.target.reset(); fetchAllData(); };
 
         window.sendMessage = async (e) => {
@@ -181,7 +226,7 @@
             
             if (window.state.activeTab === 'dashboard') {
                 const pendingTasks = window.state.myTasks.filter(t => !t.completed);
-                const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending').length;
+                const reviewNeeded = window.state.submissions.filter(s => s.status === 'Pending' && s.member_id !== 'LEADER').length;
                 const examsList = window.state.exams.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
                 const now = Date.now();
                 
@@ -279,17 +324,49 @@
             } else if (window.state.activeTab === 'teamMgmt') {
                 const checkboxes = window.state.courses.map(c => `<label class="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer hover:bg-stone-100"><input type="checkbox" name="tm-courses" value="${c.id}" class="w-4 h-4 text-[#556B2F]"><span class="text-sm font-bold text-stone-700">${c.code}</span></label>`).join('');
                 const list = window.state.teamMembers.map(m => `<div class="p-4 bg-white border rounded-xl flex justify-between items-center mb-3"><div><p class="font-bold text-lg">${m.name} <span class="text-sm font-normal text-stone-500 ml-2">ID: ${m.member_id}</span></p><div class="flex gap-2 mt-2">${(m.courses || []).map(cid => `<span class="px-2 py-1 bg-[#EAECE4] text-xs rounded font-bold text-stone-700">${getCourseCode(cid)}</span>`).join('')}</div></div><div class="flex gap-2"><button onclick="editTeamMember('${m.id}', '${m.member_id}', '${m.name.replace(/'/g, "\\'")}', '${(m.courses || []).join(',')}')" class="text-blue-500 bg-blue-50 p-3 rounded-lg hover:bg-blue-100"><i data-lucide="edit"></i></button><button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No team members registered.</p>';
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Team Management</h1><form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2><input type="hidden" id="tm-doc-id" value=""><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-stone-50" required><input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-stone-50" required></div><p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes}</div><button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button><button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
+                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Team Management</h1><form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2><input type="hidden" id="tm-doc-id" value=""><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-white" required><input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-white" required></div><p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes}</div><button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button><button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
             } else if (window.state.activeTab === 'myTasks') {
                 const options = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
                 const list = window.state.myTasks.filter(t=>!t.completed).map(t => `<div class="flex justify-between p-4 bg-white border rounded-xl mb-3 items-center"><div class="flex items-center gap-4"><button onclick="toggleMyTask('${t.id}')" class="h-6 w-6 rounded-full border-2 border-[#D5D8C5] hover:bg-[#556B2F] hover:border-[#556B2F] transition-colors"></button><div><p class="font-bold text-stone-800">${t.title}</p><p class="text-xs text-stone-500">${getCourseCode(t.course_id)} | Due: ${t.due_date}</p></div></div><div class="flex gap-2"><button onclick="editMyTask('${t.id}', '${t.title.replace(/'/g, "\\'")}', '${t.course_id}', '${t.due_date}')" class="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100"><i data-lucide="edit" class="w-4 h-4"></i></button><button onclick="deleteItem('tasks', '${t.id}')" class="text-red-500 bg-red-50 p-2 rounded-lg hover:bg-red-100"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No personal tasks yet.</p>';
                 main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Personal Tasks</h1><form onsubmit="addMyTask(event)" id="t-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="check-square" class="text-[#556B2F]"></i> <span id="t-form-title">Add New Task</span></h2><input type="hidden" id="t-id" value=""><div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><input type="text" id="t-title" placeholder="Task Name" class="col-span-1 md:col-span-2 p-3 border rounded-xl bg-white" required><select id="t-course" class="p-3 border rounded-xl bg-white" required><option value="" disabled selected>Course</option>${options}</select><input type="date" id="t-date" class="p-3 border rounded-xl bg-white" required></div><button type="submit" id="t-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Add Task</button><button type="button" id="t-cancel-btn" onclick="cancelEditTask()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
             } else if (window.state.activeTab === 'submissions') {
                 const getStatusColor = (status) => { if(status === 'Pending') return 'bg-blue-50 border-blue-200 text-blue-800'; if(status === 'Reviewing') return 'bg-orange-50 border-orange-200 text-orange-800'; if(status === 'Approved') return 'bg-green-50 border-green-200 text-green-800'; if(status === 'Rejected') return 'bg-red-50 border-red-200 text-red-800'; };
-                const list = window.state.submissions.map(s => {
+                
+                // Separate student submissions from returned leader docs
+                const studentSubs = window.state.submissions.filter(s => s.member_id !== 'LEADER');
+                const leaderDocs = window.state.submissions.filter(s => s.member_id === 'LEADER');
+                const courseOptions = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
+
+                const list = studentSubs.map(s => {
                     const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
-                    return `<div class="p-4 bg-white border-2 rounded-xl mb-3 flex flex-col md:flex-row justify-between md:items-center gap-4 ${getStatusColor(s.status)}"><div><p class="font-bold text-lg">${s.title}</p><p class="text-sm">Submitted by: <span class="font-bold">${s.member_name}</span> | Course: ${getCourseCode(s.course_id)}</p><p class="text-xs text-stone-600 mt-1 font-medium"><i data-lucide="clock" class="inline w-3 h-3 mr-1"></i>${timeString}</p><a href="${s.file_url}" target="_blank" class="text-sm underline font-bold mt-2 inline-block"><i data-lucide="download-cloud" class="inline w-4 h-4 mr-1"></i>${s.file_name}</a></div><div class="flex gap-2 items-center"><select onchange="updateSubStatus('${s.id}', this.value)" class="p-2 border rounded-lg bg-white font-bold text-sm outline-none shadow-sm"><option value="Pending" ${s.status === 'Pending' ? 'selected' : ''}>🔵 Pending</option><option value="Reviewing" ${s.status === 'Reviewing' ? 'selected' : ''}>🟠 Reviewing</option><option value="Approved" ${s.status === 'Approved' ? 'selected' : ''}>🟢 Approved</option><option value="Rejected" ${s.status === 'Rejected' ? 'selected' : ''}>🔴 Rejected</option></select><button onclick="deleteItem('submissions', '${s.id}')" class="p-2 bg-white rounded-lg hover:bg-stone-100 text-stone-500 shadow-sm"><i data-lucide="trash"></i></button></div></div>`}).join('') || '<p class="text-stone-500 text-center py-8">No submissions yet.</p>';
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Submitted Tasks</h1><div class="bg-white p-4 rounded-xl border mb-6 flex gap-4 text-xs font-bold justify-center flex-wrap"><span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200">Pending</span><span class="px-3 py-1 bg-orange-50 text-orange-700 rounded-full border border-orange-200">Reviewing</span><span class="px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200">Approved</span><span class="px-3 py-1 bg-red-50 text-red-700 rounded-full border border-red-200">Rejected</span></div><div>${list}</div>`;
+                    return `<div class="p-4 bg-white border-2 rounded-xl mb-3 flex flex-col md:flex-row justify-between md:items-center gap-4 ${getStatusColor(s.status)}"><div><p class="font-bold text-lg">${s.title}</p><p class="text-sm">Submitted by: <span class="font-bold">${s.member_name}</span> | Course: ${getCourseCode(s.course_id)}</p><p class="text-xs text-stone-600 mt-1 font-medium"><i data-lucide="clock" class="inline w-3 h-3 mr-1"></i>${timeString}</p><a href="${s.file_url}" target="_blank" class="text-sm underline font-bold mt-2 inline-block"><i data-lucide="download-cloud" class="inline w-4 h-4 mr-1"></i>${s.file_name}</a></div><div class="flex gap-2 items-center"><select onchange="updateSubStatus('${s.id}', this.value)" class="p-2 border rounded-lg bg-white font-bold text-sm outline-none shadow-sm"><option value="Pending" ${s.status === 'Pending' ? 'selected' : ''}>🔵 Pending</option><option value="Reviewing" ${s.status === 'Reviewing' ? 'selected' : ''}>🟠 Reviewing</option><option value="Approved" ${s.status === 'Approved' ? 'selected' : ''}>🟢 Approved</option><option value="Rejected" ${s.status === 'Rejected' ? 'selected' : ''}>🔴 Rejected</option></select><button onclick="deleteItem('submissions', '${s.id}')" class="p-2 bg-white rounded-lg hover:bg-stone-100 text-stone-500 shadow-sm"><i data-lucide="trash"></i></button></div></div>`}).join('') || '<p class="text-stone-500 text-center py-8">No student submissions yet.</p>';
+
+                const returnedList = leaderDocs.map(s => {
+                    const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
+                    return `<div class="p-4 bg-white border border-stone-200 rounded-xl mb-3 flex justify-between items-center gap-4"><div><p class="font-bold text-stone-800">${s.title}</p><p class="text-xs text-stone-500 mt-1"><i data-lucide="clock" class="inline w-3 h-3 mr-1"></i>${timeString} | Course: ${getCourseCode(s.course_id)}</p><a href="${s.file_url}" target="_blank" class="text-xs underline font-bold mt-2 inline-block text-[#556B2F]"><i data-lucide="paperclip" class="inline w-3 h-3"></i> ${s.file_name}</a></div><button onclick="deleteItem('submissions', '${s.id}')" class="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 shadow-sm"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}).join('') || '<p class="text-stone-500 text-sm italic py-4">No documents returned to team yet.</p>';
+
+                main.innerHTML = `
+                    <h1 class="text-3xl font-bold mb-6">Submissions & Documents</h1>
+                    
+                    <div class="mb-10">
+                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2 border-b pb-2"><i data-lucide="inbox" class="h-5 w-5 text-blue-600"></i> Review Team Submissions</h2>
+                        <div class="bg-white p-4 rounded-xl border mb-6 flex gap-4 text-xs font-bold justify-center flex-wrap"><span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200">Pending</span><span class="px-3 py-1 bg-orange-50 text-orange-700 rounded-full border border-orange-200">Reviewing</span><span class="px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200">Approved</span><span class="px-3 py-1 bg-red-50 text-red-700 rounded-full border border-red-200">Rejected</span></div>
+                        <div>${list}</div>
+                    </div>
+
+                    <div>
+                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2 border-b pb-2 text-[#8B4513]"><i data-lucide="file-check-2" class="h-5 w-5"></i> Return Checked Documents to Team</h2>
+                        <form onsubmit="returnDocument(event)" class="bg-white p-5 rounded-2xl border mb-6 grid gap-4 shadow-sm">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="text-[10px] font-black text-stone-500 uppercase tracking-wide px-1 mb-1 block">Document Title</label><input type="text" id="ret-title" placeholder="e.g. Feedback - Unit Analisis..." class="p-3 border rounded-lg w-full bg-stone-50" required></div>
+                                <div><label class="text-[10px] font-black text-stone-500 uppercase tracking-wide px-1 mb-1 block">Target Course Group</label><select id="ret-course" class="p-3 border rounded-lg w-full bg-stone-50" required><option value="" disabled selected>Select Course</option>${courseOptions}</select></div>
+                            </div>
+                            <div class="bg-stone-50 border rounded-lg p-3"><label class="text-[10px] font-black text-stone-500 uppercase tracking-wide px-1 mb-2 block">Attach Checked File</label><input type="file" id="ret-file" class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#EAECE4] file:text-[#4B5320] hover:file:bg-[#D5D8C5]" required></div>
+                            <button type="submit" id="ret-btn" class="bg-[#4B5320] text-white font-bold p-3 rounded-lg hover:bg-[#556B2F] transition-colors"><i data-lucide="send" class="inline w-4 h-4 mr-1"></i> Send to Team</button>
+                        </form>
+                        <div>${returnedList}</div>
+                    </div>
+                `;
             } else if (window.state.activeTab === 'courses') {
                 const list = window.state.courses.map(c => `<div class="flex justify-between items-center p-4 border-b last:border-0 bg-white"><div><span class="font-bold mr-3">${c.code}</span><span class="text-stone-600">${c.name}</span></div><button onclick="deleteItem('courses', '${c.id}')" class="text-red-500"><i data-lucide="trash-2"></i></button></div>`).join('');
                 main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Courses</h1><form onsubmit="addCourse(event)" class="bg-white p-5 rounded-2xl border mb-6 flex gap-3"><input type="text" id="c-code" placeholder="Code" class="w-32 p-3 border rounded-xl" required><input type="text" id="c-name" placeholder="Course Name" class="flex-1 p-3 border rounded-xl" required><button type="submit" class="bg-[#4B5320] text-white px-6 rounded-xl font-bold">Add</button></form><div class="border rounded-2xl overflow-hidden">${list}</div>`;
