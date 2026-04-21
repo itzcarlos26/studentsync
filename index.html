@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StudentSync | Portal</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -26,7 +27,7 @@
         <p class="text-center text-sm text-stone-500 mb-6" id="status-text">Enter your ID to access your workspace.</p>
 
         <form id="id-form" onsubmit="verifyId(event)">
-            <input type="text" id="user-id" placeholder="Enter Your ID" class="w-full p-4 border rounded-xl bg-[#F9FAF8] mb-4 text-center font-bold text-lg outline-none focus:border-[#4B5320]" required>
+            <input type="text" id="user-id" placeholder="Enter ID (e.g., 103573 or 106122)" class="w-full p-4 border rounded-xl bg-[#F9FAF8] mb-4 text-center font-bold text-lg outline-none focus:border-[#4B5320]" required>
             <button type="submit" id="btn-verify" class="w-full bg-[#4B5320] text-white p-4 rounded-xl font-bold hover:bg-[#556B2F] transition-colors">Continue</button>
         </form>
 
