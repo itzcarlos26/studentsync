@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StudentSync | Team Portal</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -92,7 +93,6 @@
         const getCourseCode = (id) => window.state.allCourses.find(c => c.id === id)?.code || 'Unknown Course';
 
         async function fetchAllData() {
-            // Updated: Fetch both member's own submissions AND leader's returned documents
             const [c, sub, a, m] = await Promise.all([
                 supabase.from('courses').select('*'),
                 supabase.from('submissions').select('*').or(`member_id.eq.${memberData.member_id},member_id.eq.LEADER`).order('updated_at', { ascending: false }),
@@ -102,10 +102,7 @@
             
             window.state.allCourses = c.data || []; window.state.announcements = a.data || []; window.state.messages = m.data || [];
 
-            // Filter out purely the student's submissions
             const mySubs = (sub.data || []).filter(s => s.member_id === memberData.member_id);
-            
-            // Filter out purely the leader's returned documents that belong to courses this member takes
             const leaderDocs = (sub.data || []).filter(s => s.member_id === 'LEADER' && (memberData.courses || []).includes(s.course_id));
 
             window.state.submissionsHtml = mySubs.map(s => {
@@ -138,7 +135,6 @@
                 </div>`;
             });
 
-            // --- NEW: Generate HTML for documents the leader returned ---
             window.state.leaderDocsHtml = leaderDocs.map(s => {
                 const timeString = new Date(s.updated_at || s.created_at).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
                 return `
