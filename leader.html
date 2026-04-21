@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StudentSync | Leader Dashboard</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -141,7 +142,6 @@
             showToast(`Status updated to ${status}`); fetchAllData(); 
         };
 
-        // --- NEW: Handle Returning Checked Documents to Team ---
         window.returnDocument = async (e) => {
             e.preventDefault();
             const title = document.getElementById('ret-title').value;
@@ -161,7 +161,6 @@
                 
                 const { data } = supabase.storage.from('submissions').getPublicUrl(filePath);
                 
-                // Save under special LEADER ID tag
                 await supabase.from('submissions').insert([{
                     member_id: 'LEADER',
                     member_name: 'Leader',
@@ -324,7 +323,7 @@
             } else if (window.state.activeTab === 'teamMgmt') {
                 const checkboxes = window.state.courses.map(c => `<label class="flex items-center gap-2 p-2 border rounded-lg bg-stone-50 cursor-pointer hover:bg-stone-100"><input type="checkbox" name="tm-courses" value="${c.id}" class="w-4 h-4 text-[#556B2F]"><span class="text-sm font-bold text-stone-700">${c.code}</span></label>`).join('');
                 const list = window.state.teamMembers.map(m => `<div class="p-4 bg-white border rounded-xl flex justify-between items-center mb-3"><div><p class="font-bold text-lg">${m.name} <span class="text-sm font-normal text-stone-500 ml-2">ID: ${m.member_id}</span></p><div class="flex gap-2 mt-2">${(m.courses || []).map(cid => `<span class="px-2 py-1 bg-[#EAECE4] text-xs rounded font-bold text-stone-700">${getCourseCode(cid)}</span>`).join('')}</div></div><div class="flex gap-2"><button onclick="editTeamMember('${m.id}', '${m.member_id}', '${m.name.replace(/'/g, "\\'")}', '${(m.courses || []).join(',')}')" class="text-blue-500 bg-blue-50 p-3 rounded-lg hover:bg-blue-100"><i data-lucide="edit"></i></button><button onclick="deleteItem('team_members', '${m.id}')" class="text-red-500 bg-red-50 p-3 rounded-lg hover:bg-red-100"><i data-lucide="user-minus"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No team members registered.</p>';
-                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Team Management</h1><form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2><input type="hidden" id="tm-doc-id" value=""><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-white" required><input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-white" required></div><p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes}</div><button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button><button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
+                main.innerHTML = `<h1 class="text-3xl font-bold mb-6">Team Management</h1><form onsubmit="addTeamMember(event)" id="tm-form" class="bg-white p-6 rounded-2xl border mb-8"><h2 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-[#556B2F]"></i> <span id="tm-form-title">Register New Member</span></h2><input type="hidden" id="tm-doc-id" value=""><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" id="tm-id" placeholder="Student ID (e.g. 106122)" class="p-3 border rounded-xl bg-stone-50" required><input type="text" id="tm-name" placeholder="Full Name" class="p-3 border rounded-xl bg-stone-50" required></div><p class="text-xs font-bold text-stone-500 uppercase mb-2">Assign Courses</p><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">${checkboxes}</div><button type="submit" id="tm-submit-btn" class="w-full bg-[#4B5320] text-white p-3 rounded-xl font-bold">Register Member</button><button type="button" id="tm-cancel-btn" onclick="cancelEditTm()" class="hidden w-full mt-2 text-stone-500 font-bold p-3 rounded-xl hover:bg-stone-100">Cancel Edit</button></form><div>${list}</div>`;
             } else if (window.state.activeTab === 'myTasks') {
                 const options = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
                 const list = window.state.myTasks.filter(t=>!t.completed).map(t => `<div class="flex justify-between p-4 bg-white border rounded-xl mb-3 items-center"><div class="flex items-center gap-4"><button onclick="toggleMyTask('${t.id}')" class="h-6 w-6 rounded-full border-2 border-[#D5D8C5] hover:bg-[#556B2F] hover:border-[#556B2F] transition-colors"></button><div><p class="font-bold text-stone-800">${t.title}</p><p class="text-xs text-stone-500">${getCourseCode(t.course_id)} | Due: ${t.due_date}</p></div></div><div class="flex gap-2"><button onclick="editMyTask('${t.id}', '${t.title.replace(/'/g, "\\'")}', '${t.course_id}', '${t.due_date}')" class="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100"><i data-lucide="edit" class="w-4 h-4"></i></button><button onclick="deleteItem('tasks', '${t.id}')" class="text-red-500 bg-red-50 p-2 rounded-lg hover:bg-red-100"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div>`).join('') || '<p class="text-stone-500 text-center py-8">No personal tasks yet.</p>';
@@ -332,7 +331,6 @@
             } else if (window.state.activeTab === 'submissions') {
                 const getStatusColor = (status) => { if(status === 'Pending') return 'bg-blue-50 border-blue-200 text-blue-800'; if(status === 'Reviewing') return 'bg-orange-50 border-orange-200 text-orange-800'; if(status === 'Approved') return 'bg-green-50 border-green-200 text-green-800'; if(status === 'Rejected') return 'bg-red-50 border-red-200 text-red-800'; };
                 
-                // Separate student submissions from returned leader docs
                 const studentSubs = window.state.submissions.filter(s => s.member_id !== 'LEADER');
                 const leaderDocs = window.state.submissions.filter(s => s.member_id === 'LEADER');
                 const courseOptions = window.state.courses.map(c => `<option value="${c.id}">${c.code}</option>`).join('');
